@@ -21,6 +21,8 @@
     <p>Not affiliated with or endorsed by the SQLAlchemy project.</p>
     ]]></description>
     <change-notes><![CDATA[
+    <p><b>0.1.2</b> &mdash; columns built by helper functions (<code>*timestamps()</code>, <code>id = uuid_pk()</code>)
+    are recognised, and other libraries' <code>Table</code> classes (e.g. rich) no longer switch off checks.</p>
     <p><b>0.1.1</b> &mdash; fewer false alarms. Now stays quiet (instead of guessing) for: table names computed by
     <code>@declared_attr</code>, reflected tables (<code>autoload_with</code>), classes mapped imperatively or via
     <code>__table__</code>, models defined inside functions, schema-qualified <code>secondary="schema.table"</code>,

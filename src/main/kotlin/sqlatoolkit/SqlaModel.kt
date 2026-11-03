@@ -79,6 +79,13 @@ class SqlaModel private constructor(
         private val COLUMN_CALLS = setOf("mapped_column", "Column", "column_property", "deferred")
         private val RELATIONSHIP_CALLS = setOf("relationship", "relation", "backref")
         private val ATTRIBUTE_DECORATORS = setOf("hybrid_property", "hybrid_method", "declared_attr", "column_property", "property")
+        private val TABLE_NON_COLUMNS = setOf(
+            "PrimaryKeyConstraint",
+            "ForeignKeyConstraint",
+            "UniqueConstraint",
+            "CheckConstraint",
+            "Index",
+        )
         private val REFLECTION_KWARGS = setOf("autoload_with", "autoload", "extend_existing", "keep_existing")
 
         fun get(project: Project): SqlaModel = CachedValuesManager.getManager(project).getCachedValue(project) {
@@ -134,22 +141,29 @@ class SqlaModel private constructor(
             }
             // Core tables can be declared anywhere (module level, inside functions, in __table__ assignments).
             for (call in PsiTreeUtil.findChildrenOfType(file, PyCallExpression::class.java)) {
-                if (calleeName(call) != "Table" || !SqlaPsi.isSqlalchemyCall(call)) continue
+                if (calleeName(call) != "Table") continue
                 val positional = call.arguments.filter { it !is PyKeywordArgument }
-                if (positional.size < 2) continue // SQLAlchemy's Table(name, metadata, ...); anything else is another Table
+                // SQLAlchemy's signature is Table(name, metadata, *columns). Other libraries' Table classes (rich,
+                // prettytable, ...) take strings there. Decided syntactically, NOT by resolving the call: these facts
+                // are cached against this file alone, so they must not depend on other files or the interpreter.
+                if (positional.size < 2 || positional[1] is PyStringLiteralExpression) continue
                 val name = (positional[0] as? PyStringLiteralExpression)?.stringValue
                 if (name == null) {
                     dynamic = true
                     continue
                 }
-                val reflected = call.arguments.any { it is PyKeywordArgument && it.keyword in REFLECTION_KWARGS }
+                var known = call.arguments.none { it is PyKeywordArgument && it.keyword in REFLECTION_KWARGS }
                 val cols = LinkedHashMap<String, PsiElement>()
                 for (arg in positional.drop(2)) {
-                    val c = arg as? PyCallExpression ?: continue
-                    if (calleeName(c) != "Column") continue
-                    (c.arguments.firstOrNull() as? PyStringLiteralExpression)?.let { cols[it.stringValue] = it }
+                    val c = arg as? PyCallExpression
+                    when {
+                        c != null && calleeName(c) == "Column" ->
+                            (c.arguments.firstOrNull() as? PyStringLiteralExpression)?.let { cols[it.stringValue] = it }
+                        c != null && calleeName(c) in TABLE_NON_COLUMNS -> {}
+                        else -> known = false // *helper(), a variable, an unknown call: columns we can't see
+                    }
                 }
-                tables.add(SqlaTable(name, call, null, if (reflected || cols.isEmpty()) null else cols))
+                tables.add(SqlaTable(name, call, null, if (known && cols.isNotEmpty()) cols else null))
             }
             return FileFacts(mapped, tables, inherits, dynamic)
         }
@@ -206,6 +220,8 @@ class SqlaModel private constructor(
                         // mapped_column("db_name", ...) / Column("db_name", ...) sets the DB column name
                         val dbName = ((value as PyCallExpression).arguments.firstOrNull() as? PyStringLiteralExpression)?.stringValue
                         if (dbName != null) out.putIfAbsent(dbName, attr)
+                    } else if (value is PyCallExpression && !isRelationshipCall(value) && !name.startsWith("__")) {
+                        out.putIfAbsent(name, attr) // `id = uuid_pk()`: a helper may build the column; can't tell, so count it
                     } else if (isMappedAnnotation(attr)) {
                         out.putIfAbsent(name, attr) // `x: Mapped[int]` with no assignment is still a column
                     }

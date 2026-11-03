@@ -288,6 +288,59 @@ class SqlaReferenceInspectionTest : BasePlatformTestCase() {
         """,
     )
 
+    // ---- second review pass (2026-11-03) ----------------------------------------------------------
+    fun testColumnsFromHelpersAreNotFlagged() = quiet(
+        "helpers.py" to """
+        from sqlalchemy import Column, ForeignKey, Integer, Table
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+        def timestamps():
+            return [Column("created_at", Integer), Column("updated_at", Integer)]
+
+        def uuid_pk():
+            return Column(Integer, primary_key=True)
+
+        class Base(DeclarativeBase):
+            pass
+
+        audit = Table("audit", Base.metadata, Column("id", Integer, primary_key=True), *timestamps())
+
+        class Doc(Base):
+            __tablename__ = "doc"
+            id = uuid_pk()
+
+        class Ref(Base):
+            __tablename__ = "ref"
+            pk: Mapped[int] = mapped_column(primary_key=True)
+            a: Mapped[int] = mapped_column(ForeignKey("audit.created_at"))
+            b: Mapped[int] = mapped_column(ForeignKey("doc.id"))
+        """,
+    )
+
+    fun testOtherLibrariesTableDoesNotDisableUnknownTable() = check(
+        """
+        from rich.table import Table   # not SQLAlchemy; unresolvable here, as with no interpreter configured
+        header = "Name"
+        grid = Table(header, "Age")
+
+        class A(Base):
+            __tablename__ = "a8"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            x: Mapped[int] = mapped_column(ForeignKey("<warning descr="Unknown table 'usres'">usres</warning>.id"))
+        """,
+    )
+
+    fun testNoCrashWhileIndexing() {
+        models()
+        myFixture.configureByText("dumb.py", "from sqlalchemy.orm import relationship\nx = relationship(\"Us<caret>er\")\n")
+        val ref = myFixture.getReferenceAtCaretPositionWithAssertion()
+        com.intellij.testFramework.DumbModeTestUtils.runInDumbModeSynchronously(project) {
+            com.intellij.psi.PsiManager.getInstance(project).dropPsiCaches() // force a rebuild while indexes are unavailable
+            ref.resolve() // must not throw IndexNotReadyException; null is fine while indexing
+            ref.variants
+        }
+    }
+
     // ---- navigation and completion (advertised features, previously untested) -----------------
     private fun atCaret(code: String) {
         models()

@@ -1,5 +1,16 @@
 # Changelog — Mapper Guard
 
+## 0.1.2 — 2026-11-03
+Second review pass over the 0.1.1 rewrite (each fix has a regression test that failed first):
+- Columns built by helper functions are recognised: `Table(..., *timestamps())` and `id = uuid_pk()` no longer
+  make a correct ForeignKey look broken.
+- Another library's `Table` class (rich, prettytable...) with a computed first argument no longer switches off
+  "Unknown table" for the whole project. Detection is now syntactic, so cached per-file facts no longer
+  depend on other files or the interpreter.
+- Checked and NOT a bug: references during indexing (dumb mode) - kept a test that forces a rebuild while
+  indexes are unavailable.
+- Tests: 22 -> 25.
+
 ## 0.1.1 — 2026-11-03
 Fixes from a full code review. All were false alarms on valid SQLAlchemy, which is the failure that makes
 people uninstall a checker. When the plugin can't know something for sure, it now says nothing.

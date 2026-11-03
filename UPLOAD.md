@@ -1,6 +1,6 @@
 # Publishing Mapper Guard — the steps only you can do (~10 minutes)
 
-Everything else is done for the current release (`v0.1.1`): 22/22 unit tests, ktlint clean, JetBrains'
+Everything else is done for the current release (`v0.1.2`): 25/25 unit tests, ktlint clean, JetBrains'
 verifier says **Compatible**, and the real-codebase harness passes (0 false alarms, 6/6 planted errors caught).
 
 ## Status (2026-11-03)
@@ -9,7 +9,7 @@ verifier says **Compatible**, and the real-codebase harness passes (0 false alar
 
 ## Upload (or update)
 - File: the newest `build/distributions/mapper-guard-<version>.zip` — also copied to `C:\Users\mikew\Downloads`.
-- If 0.1.0 is already uploaded and in review, upload 0.1.1 from the plugin's page → **Upload Update**.
+- Upload the newest zip. For later releases, use the plugin's page → **Upload Update**.
 - **License:** MIT — `https://github.com/mwassong/mapper-guard/blob/main/LICENSE`
 - **Source code:** `https://github.com/mwassong/mapper-guard`
 - **Tags:** `Code Tools`, `Inspection`, `Database`, `Framework`. Hidden: unticked. Channel: default.
