@@ -13,7 +13,8 @@ set -euo pipefail
 
 RIG="${RIG:-/home/yamu/side-hustle/.tools}"
 PYCHARM="$RIG/pycharm-2026.2.3"
-PLUGIN_ZIP="$(cd "$(dirname "$0")/.." && pwd)/build/distributions/mapper-guard-0.1.0.zip"
+VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$(dirname "$0")/../build.gradle.kts")"
+PLUGIN_ZIP="$(cd "$(dirname "$0")/.." && pwd)/build/distributions/mapper-guard-$VERSION.zip"
 WORK="$RIG/real"
 export PYCHARM_VM_OPTIONS="$RIG/pc.vmoptions"
 

@@ -1,17 +1,28 @@
 package sqlatoolkit
 
 import com.intellij.openapi.util.TextRange
-import com.intellij.psi.PsiElement
-import com.jetbrains.python.psi.*
+import com.jetbrains.python.psi.PyArgumentList
+import com.jetbrains.python.psi.PyAssignmentStatement
+import com.jetbrains.python.psi.PyCallExpression
+import com.jetbrains.python.psi.PyClass
+import com.jetbrains.python.psi.PyKeywordArgument
+import com.jetbrains.python.psi.PyLambdaExpression
+import com.jetbrains.python.psi.PyQualifiedNameOwner
+import com.jetbrains.python.psi.PyReferenceExpression
+import com.jetbrains.python.psi.PyStringLiteralExpression
+import com.jetbrains.python.psi.PyTargetExpression
 
 /** Where a string literal sits inside a SQLAlchemy call, if anywhere interesting. */
 sealed class SqlaSite {
     /** relationship("User") — first positional argument. */
     class RelationshipTarget(val call: PyCallExpression) : SqlaSite()
+
     /** relationship(..., back_populates="addresses"). */
     class BackPopulates(val call: PyCallExpression) : SqlaSite()
+
     /** relationship(..., secondary="user_roles"). */
     class Secondary(val call: PyCallExpression) : SqlaSite()
+
     /** ForeignKey("users.id") / ForeignKey("schema.users.id"). */
     object ForeignKey : SqlaSite()
 }
@@ -76,16 +87,10 @@ object SqlaPsi {
     /** Mapped["User"], Mapped[List["User"]], Mapped[list[User]], Mapped[Optional["User"]], Mapped["User | None"] -> User */
     fun annotationClassName(ann: String): String? {
         val inner = ann.removePrefix("Mapped[").removeSuffix("]")
-        val skip = setOf("List", "list", "Set", "set", "Optional", "Sequence", "None", "typing", "Mapped", "WriteOnlyMapped", "DynamicMapped")
+        val skip =
+            setOf("List", "list", "Set", "set", "Optional", "Sequence", "None", "typing", "Mapped", "WriteOnlyMapped", "DynamicMapped")
         return Regex("[A-Za-z_][A-Za-z0-9_.]*").findAll(inner).map { it.value.substringAfterLast('.') }
             .firstOrNull { it !in skip }
-    }
-
-    /** The class enclosing an element (e.g. the model a relationship is declared on). */
-    fun enclosingClass(e: PsiElement): PyClass? {
-        var p: PsiElement? = e.parent
-        while (p != null && p !is PyClass) p = p.parent
-        return p as? PyClass
     }
 
     /** ForeignKey("schema.table.col") -> ("table", range-of-table, "col", range-of-col) within the literal. */
@@ -98,8 +103,10 @@ object SqlaPsi {
         if (dot <= 0) return null
         val tableStart = value.lastIndexOf('.', dot - 1) + 1
         return FkParts(
-            value.substring(tableStart, dot), TextRange(offset + tableStart, offset + dot),
-            value.substring(dot + 1), TextRange(offset + dot + 1, offset + value.length),
+            value.substring(tableStart, dot),
+            TextRange(offset + tableStart, offset + dot),
+            value.substring(dot + 1),
+            TextRange(offset + dot + 1, offset + value.length),
         )
     }
 }

@@ -9,13 +9,13 @@ the warning, then uninstall. Precision comes before coverage, always.
 
 ## Before any release
 ```bash
-JAVA_HOME=$(ls -d ~/.local/opt/jdk-21*) ./gradlew test verifyPlugin buildPlugin
+JAVA_HOME=$(ls -d ~/.local/opt/jdk-21*) ./gradlew ktlintCheck test verifyPlugin buildPlugin
 ```
 1. **Unit tests green** (`src/test/kotlin`). Every rule has both a "must flag" and a "must NOT flag" case.
 2. **`verifyPlugin` clean** — JetBrains' own compatibility check; it gates Marketplace approval.
 3. **Real-codebase run**: the harness in `/home/yamu/side-hustle/.tools` runs the plugin headless over
    MLflow and CTFd. Required result: **0 warnings on unmodified code**, and with the typos planted by
-   `plant_typos.sh`, **6/6 caught**. A run that reports nothing on both is a broken harness, not a pass —
+   `scripts/plant_typos.py`, **6/6 caught**. A run that reports nothing on both is a broken harness, not a pass —
    check `SqlaModel built: N classes` in `pclog/idea.log` and that `.idea/` was deleted first.
 4. **Version bumped** in `build.gradle.kts` + `CHANGELOG.md` entry + git tag.
 
@@ -28,6 +28,11 @@ JAVA_HOME=$(ls -d ~/.local/opt/jdk-21*) ./gradlew test verifyPlugin buildPlugin
 - **DB column names differ from attribute names** (`mapped_column("email", ...)`). Both resolve.
 - **Never widen a check without adding a "must NOT flag" test** in the same commit.
 - Inspection warnings carry the exact range *inside* the quotes, not the quotes themselves.
+
+- **Unknown means quiet.** Dynamic table names, reflected tables and unresolvable base classes make the
+  relevant check skip, never guess (`SqlaModel.tablesComplete`, `tableColumns() == null`, `attributesOf() == null`).
+- **Per-file facts only depend on their own file** (`SqlaModel.extract`). Anything that needs another file
+  (inherited table names, ancestors) is resolved at aggregate or query time, or the cache goes stale.
 
 ## Not built yet (deliberate)
 `primaryjoin`/`order_by` string expressions, `backref()` strings, Alembic, async sessions, SQLModel.

@@ -140,6 +140,200 @@ class SqlaReferenceInspectionTest : BasePlatformTestCase() {
         """,
     )
 
+    // ---- false-alarm regressions from the 2026-11-03 code review --------------------------------
+    // Each one is valid SQLAlchemy that 0.1.0 flagged. Isolated files, so project-wide state can't leak.
+    private fun quiet(vararg files: Pair<String, String>) {
+        for ((name, text) in files.dropLast(1)) myFixture.addFileToProject(name, text.trimIndent())
+        val (name, text) = files.last()
+        myFixture.configureByText(name, text.trimIndent())
+        myFixture.checkHighlighting(true, false, false)
+    }
+
+    fun testDeclaredAttrTablenameIsNotUnknownTable() = quiet(
+        "dyn.py" to """
+        from sqlalchemy import ForeignKey
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, declared_attr
+
+        class DynBase(DeclarativeBase):
+            @declared_attr.directive
+            def __tablename__(cls):
+                return cls.__name__.lower()
+
+        class Thing(DynBase):
+            id: Mapped[int] = mapped_column(primary_key=True)
+
+        class Other(DynBase):
+            id: Mapped[int] = mapped_column(primary_key=True)
+            thing_id: Mapped[int] = mapped_column(ForeignKey("thing.id"))
+        """,
+    )
+
+    fun testReflectedTableColumnsAreNotFlagged() = quiet(
+        "reflected.py" to """
+        from sqlalchemy import ForeignKey, MetaData, Table
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+        class Base(DeclarativeBase):
+            pass
+
+        legacy = Table("legacy", Base.metadata, autoload_with=None)
+
+        class Uses(Base):
+            __tablename__ = "uses"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            legacy_id: Mapped[int] = mapped_column(ForeignKey("legacy.id"))
+        """,
+    )
+
+    fun testClassMappedWithoutColumnsIsNotUnknownClass() = quiet(
+        "imperative.py" to """
+        from sqlalchemy import Column, Integer, Table
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Plain:
+            pass
+
+        class Real(Base):   # a top-level model, so the project counts as a SQLAlchemy project
+            __tablename__ = "real"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            plain = relationship("Plain")
+
+        def make_models():
+            class Local(Base):
+                __tablename__ = "local"
+                id: Mapped[int] = mapped_column(primary_key=True)
+                plain = relationship("Plain")
+                me = relationship("Local")
+            return Local
+        """,
+    )
+
+    fun testSchemaQualifiedSecondaryIsKnown() = quiet(
+        "schema.py" to """
+        from sqlalchemy import Column, ForeignKey, Table
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+        class Base(DeclarativeBase):
+            pass
+
+        links = Table("links", Base.metadata, Column("a_id", ForeignKey("a.id")), schema="auth")
+
+        class A(Base):
+            __tablename__ = "a"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            peers: Mapped[list["A"]] = relationship(secondary="auth.links", viewonly=True)
+        """,
+    )
+
+    fun testUnresolvedBaseClassMakesAttributesUnknown() = quiet(
+        "libbase.py" to """
+        from sqlalchemy import ForeignKey
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
+        from some_auth_library import SQLAlchemyBaseUserTable
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Member(SQLAlchemyBaseUserTable, Base):
+            __tablename__ = "member"
+            nickname: Mapped[str] = mapped_column()
+
+        class Post(Base):
+            __tablename__ = "post"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            author_email: Mapped[str] = mapped_column(ForeignKey("member.email"))
+
+        def q(s: Session) -> None:
+            s.query(Member).filter_by(email="x", nickname="y")
+        """,
+    )
+
+    fun testDeclaredAttrColumnIsAColumn() = quiet(
+        "mixin.py" to """
+        from sqlalchemy import ForeignKey
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, declared_attr
+
+        class Base(DeclarativeBase):
+            pass
+
+        class TenantMixin:
+            @declared_attr
+            def tenant_id(cls):
+                return mapped_column(ForeignKey("tenant.id"))
+
+        class Tenant(Base):
+            __tablename__ = "tenant"
+            id: Mapped[int] = mapped_column(primary_key=True)
+
+        class Invoice(TenantMixin, Base):
+            __tablename__ = "invoice"
+            id: Mapped[int] = mapped_column(primary_key=True)
+
+        class Line(Base):
+            __tablename__ = "line"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            tenant_id: Mapped[int] = mapped_column(ForeignKey("invoice.tenant_id"))
+        """,
+    )
+
+    fun testSchemaQualifiedUnknownSecondaryStillFlagged() = check(
+        """
+        class A(Base):
+            __tablename__ = "a7"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            u: Mapped[list["User"]] = relationship(secondary="<warning descr="Unknown table 'auth.nope'">auth.nope</warning>")
+        """,
+    )
+
+    // ---- navigation and completion (advertised features, previously untested) -----------------
+    private fun atCaret(code: String) {
+        models()
+        myFixture.configureByText(
+            "nav.py",
+            "from sqlalchemy import ForeignKey\n" +
+                "from sqlalchemy.orm import Mapped, mapped_column, relationship\n" +
+                "from models import Base, User\n\n" +
+                code.trimIndent(),
+        )
+    }
+
+    private fun resolvedName(): String? {
+        val ref = myFixture.getReferenceAtCaretPositionWithAssertion()
+        return (ref.resolve() as? com.intellij.psi.PsiNamedElement)?.name
+    }
+
+    fun testCtrlClickClassResolvesToModel() {
+        atCaret("x = relationship(\"Us<caret>er\")")
+        assertEquals("User", resolvedName())
+    }
+
+    fun testCtrlClickForeignKeyColumnResolves() {
+        atCaret("y = mapped_column(ForeignKey(\"users.na<caret>me\"))")
+        assertEquals("name", resolvedName())
+    }
+
+    fun testCtrlClickBackPopulatesResolves() {
+        atCaret("z = relationship(\"User\", back_populates=\"addr<caret>esses\")")
+        assertEquals("addresses", resolvedName())
+    }
+
+    fun testCompletionOffersModelsAndTables() {
+        atCaret("x = relationship(\"<caret>\")")
+        myFixture.completeBasic()
+        val offered = myFixture.lookupElementStrings.orEmpty()
+        assertTrue("got $offered", offered.containsAll(listOf("User", "Address")))
+    }
+
+    fun testCompletionOffersColumnsOfTable() {
+        atCaret("y = mapped_column(ForeignKey(\"users.<caret>\"))")
+        myFixture.completeBasic()
+        val offered = myFixture.lookupElementStrings.orEmpty()
+        assertTrue("got $offered", offered.containsAll(listOf("id", "name", "email")))
+    }
+
     fun testNonSqlalchemyCodeIsUntouched() = check(
         """
         def relationship(x): return x

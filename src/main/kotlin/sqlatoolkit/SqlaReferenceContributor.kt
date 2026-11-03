@@ -3,7 +3,12 @@ package sqlatoolkit
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.openapi.util.TextRange
 import com.intellij.patterns.PlatformPatterns
-import com.intellij.psi.*
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiReference
+import com.intellij.psi.PsiReferenceBase
+import com.intellij.psi.PsiReferenceContributor
+import com.intellij.psi.PsiReferenceProvider
+import com.intellij.psi.PsiReferenceRegistrar
 import com.intellij.util.ProcessingContext
 import com.jetbrains.python.psi.PyStringLiteralExpression
 
@@ -45,7 +50,7 @@ private class ClassRef(lit: PyStringLiteralExpression, range: TextRange) : SqlaR
 
 private class TableRef(lit: PyStringLiteralExpression, range: TextRange) : SqlaRef(lit, range) {
     override fun resolve(): PsiElement? {
-        val all = model.tables[value].orEmpty()
+        val all = model.tableDeclarations(value)
         return (all.firstOrNull { it.declaration.containingFile == element.containingFile } ?: all.firstOrNull())?.declaration
     }
     override fun getVariants(): Array<Any> =
@@ -53,10 +58,9 @@ private class TableRef(lit: PyStringLiteralExpression, range: TextRange) : SqlaR
 }
 
 private class ColumnRef(lit: PyStringLiteralExpression, range: TextRange, val table: String) : SqlaRef(lit, range) {
-    override fun resolve(): PsiElement? = model.columnsOf(table)[value]
-    override fun getVariants(): Array<Any> =
-        model.columnsOf(table).keys.sorted()
-            .map { LookupElementBuilder.create(it).withTypeText("column of $table") }.toTypedArray()
+    override fun resolve(): PsiElement? = model.tableColumns(table)?.get(value)
+    override fun getVariants(): Array<Any> = model.tableColumns(table).orEmpty().keys.sorted()
+        .map { LookupElementBuilder.create(it).withTypeText("column of $table") }.toTypedArray()
 }
 
 private class AttrRef(lit: PyStringLiteralExpression, range: TextRange, val site: SqlaSite.BackPopulates) : SqlaRef(lit, range) {

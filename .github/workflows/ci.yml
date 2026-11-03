@@ -17,6 +17,9 @@ jobs:
 
       # No local PyCharm on the runner, so the build falls back to a downloaded platform
       # (see build.gradle.kts). UNVERIFIED until this repo is pushed to GitHub and CI runs once.
+      - name: Lint and format check (ktlint)
+        run: ./gradlew ktlintCheck
+
       - name: Unit tests
         run: ./gradlew test
 
