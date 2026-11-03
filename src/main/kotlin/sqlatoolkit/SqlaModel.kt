@@ -1,11 +1,14 @@
 package sqlatoolkit
 
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiManager
-import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.ProjectScope
+import com.intellij.psi.search.PsiSearchHelper
+import com.intellij.psi.util.CachedValue
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.PsiModificationTracker
@@ -65,16 +68,31 @@ class SqlaModel private constructor(
     companion object {
         private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(SqlaModel::class.java)
 
-        /** Superclass names that are declarative bases: they contribute no user columns, resolvable or not. */
-        private val DECLARATIVE_BASES = setOf(
+        /**
+         * SQLAlchemy's own bases add no user columns, so an unresolved reference to one is harmless. Deliberately
+         * NOT the bare names `Base`/`Model`: an unresolvable library mixin can be called that and carry columns.
+         * Flask-SQLAlchemy's `db.Model` is accepted only in its qualified form (see [isHarmlessBase]).
+         */
+        private val SQLALCHEMY_BASES = setOf(
             "object",
-            "Base",
-            "Model",
             "DeclarativeBase",
             "DeclarativeBaseNoMeta",
             "MappedAsDataclass",
             "AsyncAttrs",
             "SQLModel",
+        )
+
+        /** Words that must appear in a file for it to declare anything we index (word-index prefilter). */
+        private val INDEXED_WORDS = listOf(
+            "__tablename__",
+            "__table__",
+            "__mapper_args__",
+            "Table",
+            "Column",
+            "mapped_column",
+            "relationship",
+            "column_property",
+            "deferred",
         )
         private val COLUMN_CALLS = setOf("mapped_column", "Column", "column_property", "deferred")
         private val RELATIONSHIP_CALLS = setOf("relationship", "relation", "backref")
@@ -88,8 +106,14 @@ class SqlaModel private constructor(
         )
         private val REFLECTION_KWARGS = setOf("autoload_with", "autoload", "extend_existing", "keep_existing")
 
-        fun get(project: Project): SqlaModel = CachedValuesManager.getManager(project).getCachedValue(project) {
-            CachedValueProvider.Result.create(aggregate(project), PsiModificationTracker.getInstance(project))
+        /** While the IDE is indexing, the word index isn't available: report "nothing known yet" (never cached). */
+        private val EMPTY = SqlaModel(emptyMap(), emptyMap(), tablesComplete = false)
+
+        fun get(project: Project): SqlaModel {
+            if (DumbService.isDumb(project)) return EMPTY
+            return CachedValuesManager.getManager(project).getCachedValue(project) {
+                CachedValueProvider.Result.create(aggregate(project), PsiModificationTracker.getInstance(project))
+            }
         }
 
         private fun factsOf(file: PyFile): FileFacts =
@@ -99,10 +123,9 @@ class SqlaModel private constructor(
             val classes = HashMap<String, MutableList<PyClass>>()
             val tables = HashMap<String, MutableList<SqlaTable>>()
             var complete = true
-            val psi = PsiManager.getInstance(project)
-            for (vf in FileTypeIndex.getFiles(PythonFileType.INSTANCE, GlobalSearchScope.projectScope(project))) {
+            for (file in candidateFiles(project)) {
                 ProgressManager.checkCanceled()
-                val facts = factsOf(psi.findFile(vf) as? PyFile ?: continue)
+                val facts = factsOf(file)
                 for (cls in facts.mappedClasses) cls.name?.let { classes.getOrPut(it) { mutableListOf() }.add(cls) }
                 for (t in facts.tables) tables.getOrPut(t.name) { mutableListOf() }.add(t)
                 if (facts.hasDynamicTableNames) complete = false
@@ -118,13 +141,50 @@ class SqlaModel private constructor(
             return SqlaModel(classes, tables, complete)
         }
 
+        /**
+         * Project Python files that can declare models or tables. The word index answers this without parsing,
+         * so a large project only parses the handful of files that mention SQLAlchemy declarations.
+         */
+        private fun candidateFiles(project: Project): Collection<PyFile> {
+            val scope = GlobalSearchScope.getScopeRestrictedByFileTypes(GlobalSearchScope.projectScope(project), PythonFileType.INSTANCE)
+            val helper = PsiSearchHelper.getInstance(project)
+            val files = LinkedHashSet<PyFile>()
+            for (word in INDEXED_WORDS) {
+                helper.processAllFilesWithWord(word, scope, { f ->
+                    (f as? PyFile)?.let(files::add)
+                    true
+                }, true)
+            }
+            return files
+        }
+
+        /**
+         * Whether a library (site-packages, the SDK) mentions this table name in a string literal. Libraries can
+         * declare tables a project references but never subclasses (Flask-AppBuilder's `ab_user`, Airflow's
+         * tables), and those are invisible to the project scan.
+         */
+        fun mentionedInLibraries(project: Project, tableName: String): Boolean {
+            if (DumbService.isDumb(project)) return true // can't look; "mentioned" keeps the warning quiet
+            if (tableName.isEmpty() || !tableName.all { it.isLetterOrDigit() || it == '_' }) return false
+            var found = false
+            PsiSearchHelper.getInstance(project).processAllFilesWithWordInLiterals(
+                tableName,
+                ProjectScope.getLibrariesScope(project),
+            ) {
+                found = true
+                false
+            }
+            return found
+        }
+
         private fun extract(file: PyFile): FileFacts {
             val mapped = ArrayList<PyClass>()
             val tables = ArrayList<SqlaTable>()
             val inherits = ArrayList<PyClass>()
             var dynamic = false
             for (cls in file.topLevelClasses) {
-                when (val own = ownTableName(cls)) {
+                val own = ownTableName(cls)
+                when (own) {
                     is TableName.Literal -> tables.add(SqlaTable(own.name, cls, cls, null))
                     TableName.Dynamic -> dynamic = true
                     // `__table__ = Table("x", ...)` / `__table__ = some_table` are captured by the Table scan below;
@@ -134,9 +194,9 @@ class SqlaModel private constructor(
                         if (t != null && t !is PyReferenceExpression && !(t is PyCallExpression && calleeName(t) == "Table")) dynamic = true
                     }
                 }
-                if (looksMapped(cls)) {
+                if (looksMapped(cls, own)) {
                     mapped.add(cls)
-                    if (ownTableName(cls) == TableName.None) inherits.add(cls)
+                    if (own == TableName.None) inherits.add(cls)
                 }
             }
             // Core tables can be declared anywhere (module level, inside functions, in __table__ assignments).
@@ -186,28 +246,36 @@ class SqlaModel private constructor(
             (cls.findClassAttribute("__tablename__", true, null)?.findAssignedValue() as? PyStringLiteralExpression)?.stringValue
 
         /** Mapped judged from the class's own body only, so per-file caching stays correct. */
-        private fun looksMapped(cls: PyClass): Boolean = ownTableName(cls) != TableName.None ||
+        private fun looksMapped(cls: PyClass, own: TableName): Boolean = own != TableName.None ||
             cls.findClassAttribute("__table__", false, null) != null ||
             cls.findClassAttribute("__mapper_args__", false, null) != null ||
             cls.classAttributes.any { isColumnCall(it.findAssignedValue()) || isRelationshipCall(it.findAssignedValue()) }
 
         /**
          * False when some base class can't be resolved, so attributes it might contribute are unknown.
-         * Declarative bases (`db.Model`, `Base`, ...) are exempt: they add no user columns.
+         * Cached per class until the next PSI change: it is asked for on every ForeignKey/filter_by/back_populates.
          */
-        fun ancestorsKnown(cls: PyClass): Boolean {
+        fun ancestorsKnown(cls: PyClass): Boolean = cached(cls, ANCESTORS_KNOWN) { computeAncestorsKnown(cls) }
+
+        private fun computeAncestorsKnown(cls: PyClass): Boolean {
             for (c in listOf(cls) + cls.getAncestorClasses(null)) {
                 for (expr in c.superClassExpressions) {
                     val ref = expr as? PyReferenceExpression ?: continue
-                    if (ref.referencedName in DECLARATIVE_BASES) continue
+                    if (isHarmlessBase(ref)) continue
                     if (ref.reference.resolve() == null) return false
                 }
             }
             return true
         }
 
+        private fun isHarmlessBase(ref: PyReferenceExpression): Boolean =
+            ref.referencedName in SQLALCHEMY_BASES || (ref.referencedName == "Model" && ref.qualifier != null) // db.Model
+
         /** Column name (attribute and DB name) -> element; null when the columns can't all be known. */
-        fun declaredColumns(cls: PyClass): Map<String, PsiElement>? {
+        fun declaredColumns(cls: PyClass): Map<String, PsiElement>? =
+            cached(cls, DECLARED_COLUMNS) { Box(computeDeclaredColumns(cls)) }.value
+
+        private fun computeDeclaredColumns(cls: PyClass): Map<String, PsiElement>? {
             if (!ancestorsKnown(cls)) return null
             val out = LinkedHashMap<String, PsiElement>()
             for (c in listOf(cls) + cls.getAncestorClasses(null)) {
@@ -233,7 +301,9 @@ class SqlaModel private constructor(
         }
 
         /** Attributes usable in filter_by()/back_populates; null when a base class can't be resolved. */
-        fun attributesOf(cls: PyClass): Set<String>? {
+        fun attributesOf(cls: PyClass): Set<String>? = cached(cls, ATTRIBUTES) { Box(computeAttributes(cls)) }.value
+
+        private fun computeAttributes(cls: PyClass): Set<String>? {
             if (!ancestorsKnown(cls)) return null
             val out = HashSet<String>()
             for (c in listOf(cls) + cls.getAncestorClasses(null)) {
@@ -242,6 +312,19 @@ class SqlaModel private constructor(
             }
             return out
         }
+
+        /** CachedValue results must be non-null, so nullable results travel in a box. */
+        private class Box<T>(val value: T)
+
+        private val ANCESTORS_KNOWN = Key.create<CachedValue<Boolean>>("mapperguard.ancestorsKnown")
+        private val DECLARED_COLUMNS = Key.create<CachedValue<Box<Map<String, PsiElement>?>>>("mapperguard.declaredColumns")
+        private val ATTRIBUTES = Key.create<CachedValue<Box<Set<String>?>>>("mapperguard.attributes")
+
+        /** Per-class cache, invalidated on any PSI change (results depend on ancestors in other files). */
+        private fun <T : Any> cached(cls: PyClass, key: Key<CachedValue<T>>, compute: () -> T): T =
+            CachedValuesManager.getManager(cls.project).getCachedValue(cls, key, {
+                CachedValueProvider.Result.create(compute(), PsiModificationTracker.getInstance(cls.project))
+            }, false)
 
         private fun reflectsColumns(cls: PyClass): Boolean {
             val args = cls.findClassAttribute("__table_args__", false, null)?.findAssignedValue() ?: return false

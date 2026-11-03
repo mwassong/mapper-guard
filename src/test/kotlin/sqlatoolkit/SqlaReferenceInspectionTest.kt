@@ -341,6 +341,56 @@ class SqlaReferenceInspectionTest : BasePlatformTestCase() {
         }
     }
 
+    // ---- third review pass (2026-11-03) -----------------------------------------------------------
+    fun testDynamicAndConcatenatedStringsAreSkipped() = check(
+        """
+        prefix = "Us"
+        class A(Base):
+            __tablename__ = "a9"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            dyn: Mapped["User"] = relationship(f"{prefix}er")
+            cat: Mapped[int] = mapped_column(ForeignKey("us" "res.idd"))
+            esc: Mapped[int] = mapped_column(ForeignKey("users.\\x69dd"))
+        """,
+    )
+
+    fun testUnresolvedMixinNamedModelMakesColumnsUnknown() = quiet(
+        "vendor.py" to """
+        from sqlalchemy import ForeignKey
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+        from vendor_lib import Model
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Order(Model, Base):
+            __tablename__ = "order"
+            note: Mapped[str] = mapped_column()
+
+        class Ship(Base):
+            __tablename__ = "ship"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            order_id: Mapped[int] = mapped_column(ForeignKey("order.id"))
+        """,
+    )
+
+    fun testCtrlClickWorksForImperativelyMappedClass() {
+        models()
+        myFixture.addFileToProject("plain.py", "class Plain:\n    pass\n")
+        myFixture.configureByText("nav2.py", "from sqlalchemy.orm import relationship\nx = relationship(\"Pla<caret>in\")\n")
+        assertEquals("Plain", resolvedName())
+    }
+
+    fun testEachProblemReportedExactlyOnce() {
+        models()
+        myFixture.configureByText(
+            "once.py",
+            "from models import User\n\ndef get(uid):\n    return User.query.filter_by(idd=uid).first_or_404()\n",
+        )
+        val hits = myFixture.doHighlighting().filter { it.description == "'User' has no attribute 'idd'" }
+        assertEquals("duplicates: ${hits.map { it.startOffset }}", 1, hits.size)
+    }
+
     // ---- navigation and completion (advertised features, previously untested) -----------------
     private fun atCaret(code: String) {
         models()

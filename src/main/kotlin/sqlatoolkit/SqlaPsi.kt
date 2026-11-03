@@ -5,6 +5,7 @@ import com.jetbrains.python.psi.PyArgumentList
 import com.jetbrains.python.psi.PyAssignmentStatement
 import com.jetbrains.python.psi.PyCallExpression
 import com.jetbrains.python.psi.PyClass
+import com.jetbrains.python.psi.PyFormattedStringElement
 import com.jetbrains.python.psi.PyKeywordArgument
 import com.jetbrains.python.psi.PyLambdaExpression
 import com.jetbrains.python.psi.PyQualifiedNameOwner
@@ -29,6 +30,7 @@ sealed class SqlaSite {
 
 object SqlaPsi {
     fun siteOf(lit: PyStringLiteralExpression): SqlaSite? {
+        if (!isSimpleLiteral(lit)) return null
         val parent = lit.parent
         val kw = parent as? PyKeywordArgument
         val argList = (kw?.parent ?: parent) as? PyArgumentList ?: return null
@@ -45,6 +47,17 @@ object SqlaPsi {
     }
 
     private val REL = setOf("relationship", "relation")
+
+    /**
+     * One plain string element whose value is exactly its source text. f-strings are dynamic, and implicit
+     * concatenation or escape sequences make value offsets differ from text offsets, which would put warnings
+     * on the wrong characters (or outside the element).
+     */
+    fun isSimpleLiteral(lit: PyStringLiteralExpression): Boolean {
+        val elements = lit.stringElements
+        if (elements.size != 1 || elements[0] is PyFormattedStringElement) return false
+        return lit.stringValue.length == lit.stringValueTextRange.length
+    }
 
     /**
      * True when the callee resolves into SQLAlchemy (or Flask-SQLAlchemy), so a project's own function

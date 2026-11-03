@@ -17,7 +17,9 @@ JAVA_HOME=$(ls -d ~/.local/opt/jdk-21*) ./gradlew ktlintCheck test verifyPlugin 
    MLflow and CTFd. Required result: **0 warnings on unmodified code**, and with the typos planted by
    `scripts/plant_typos.py`, **6/6 caught**. A run that reports nothing on both is a broken harness, not a pass —
    check `SqlaModel built: N classes` in `pclog/idea.log` and that `.idea/` was deleted first.
-4. **Version bumped** in `build.gradle.kts` + `CHANGELOG.md` entry + git tag.
+4. **Installed check**: `scripts/installed_check.sh` must PASS (fresh profile, real interpreter with SQLAlchemy,
+   library-declared table, uninstall).
+5. **Version bumped** in `build.gradle.kts` + `CHANGELOG.md` entry + git tag.
 
 ## Rules learned the hard way (do not regress)
 - **Match by resolution, not by name.** A project's own `relationship()` function must not be flagged;

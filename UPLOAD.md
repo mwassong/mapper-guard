@@ -1,7 +1,8 @@
 # Publishing Mapper Guard — the steps only you can do (~10 minutes)
 
-Everything else is done for the current release (`v0.1.2`): 25/25 unit tests, ktlint clean, JetBrains'
-verifier says **Compatible**, and the real-codebase harness passes (0 false alarms, 6/6 planted errors caught).
+Everything else is done for the current release (`v0.1.3`): 29/29 unit tests, ktlint clean, JetBrains'
+verifier says **Compatible**, the real-codebase harness passes (0 false alarms, 6/6 planted errors caught), and
+the installed check passes (fresh profile, real interpreter, uninstall).
 
 ## Status (2026-11-03)
 - Source is public at https://github.com/mwassong/mapper-guard (default branch `main`).

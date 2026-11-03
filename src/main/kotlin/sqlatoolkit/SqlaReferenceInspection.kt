@@ -39,13 +39,14 @@ class SqlaReferenceInspection : LocalInspectionTool() {
                         warn(holder, node, "'${targets.first().name}' has no attribute '${node.stringValue}' for back_populates")
                 }
                 is SqlaSite.Secondary -> {
-                    if (model.tablesComplete && model.tableDeclarations(node.stringValue).isEmpty())
-                        warn(holder, node, "Unknown table '${node.stringValue}'")
+                    if (isUnknownTable(model, node.stringValue, node)) warn(holder, node, "Unknown table '${node.stringValue}'")
                 }
                 SqlaSite.ForeignKey -> {
                     val parts = SqlaPsi.fkParts(node) ?: return
                     if (model.tableDeclarations(parts.table).isEmpty()) {
-                        if (model.tablesComplete) holder.registerProblem(node, parts.tableRange, "Unknown table '${parts.table}'")
+                        if (isUnknownTable(model, parts.table, node)) {
+                            holder.registerProblem(node, parts.tableRange, "Unknown table '${parts.table}'")
+                        }
                     } else {
                         val cols = model.tableColumns(parts.table) ?: return // columns unknown -> stay quiet
                         if (parts.column != null && parts.column !in cols)
@@ -116,6 +117,11 @@ class SqlaReferenceInspection : LocalInspectionTool() {
         if (PyClassNameIndex.find(simple, context.project, true).isNotEmpty()) return true
         return PsiTreeUtil.findChildrenOfType(context.containingFile, PyClass::class.java).any { it.name == simple }
     }
+
+    /** Unknown only if the project doesn't declare it, all names are knowable, and no library mentions it. */
+    private fun isUnknownTable(model: SqlaModel, name: String, context: PsiElement): Boolean = model.tablesComplete &&
+        model.tableDeclarations(name).isEmpty() &&
+        !SqlaModel.mentionedInLibraries(context.project, name.substringAfterLast('.'))
 
     private fun warn(holder: ProblemsHolder, node: PyStringLiteralExpression, msg: String) =
         holder.registerProblem(node, node.stringValueTextRange, msg)

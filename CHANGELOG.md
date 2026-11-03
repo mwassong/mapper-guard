@@ -1,5 +1,19 @@
 # Changelog — Mapper Guard
 
+## 0.1.3 — 2026-11-03
+Third review pass, plus the checks that had been missing:
+- Tables declared only by an installed library (Flask-AppBuilder/Airflow `ab_user`) no longer flagged unknown.
+- f-strings, implicitly concatenated and escaped strings are skipped (were misread, and warnings could land on
+  the wrong characters).
+- An unresolvable base class named `Base`/`Model` no longer counts as harmless; only SQLAlchemy's own bases and
+  Flask's qualified `db.Model` do.
+- Ctrl+click on `relationship("X")` works for imperatively mapped / `__table__` / nested classes.
+- Performance: a word-index prefilter means only files that mention SQLAlchemy declarations are parsed;
+  per-class results (columns, attributes, base-class resolution) are cached until the next change.
+- No errors while the IDE is indexing (the new prefilter would have thrown; caught by an existing test).
+- New `scripts/installed_check.sh`: fresh IDE profile, real interpreter with SQLAlchemy + Flask-SQLAlchemy and a
+  library that declares its own table, then uninstall. Tests: 25 -> 29.
+
 ## 0.1.2 — 2026-11-03
 Second review pass over the 0.1.1 rewrite (each fix has a regression test that failed first):
 - Columns built by helper functions are recognised: `Table(..., *timestamps())` and `id = uuid_pk()` no longer

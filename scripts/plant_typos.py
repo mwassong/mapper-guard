@@ -11,11 +11,11 @@ EDITS = [
     ("ctfd_py/CTFd/models/__init__.py", 'db.ForeignKey("users.id")', 'db.ForeignKey("usrs.id")'),
     ("ctfd_py/CTFd/models/__init__.py", 'db.relationship("Users"', 'db.relationship("Userz"'),
     ("ctfd_py/CTFd/api/v1/audiences.py", "filter_by(id=audience_id)", "filter_by(idd=audience_id)"),
-    ("mlflow_store/store/tracking/dbmodels/models.py",
+    ("mlflow_store/mlflow/store/tracking/dbmodels/models.py",
      'ForeignKey("experiments.experiment_id")', 'ForeignKey("experiments.experiment_idd")'),
-    ("mlflow_store/store/tracking/dbmodels/models.py",
+    ("mlflow_store/mlflow/store/tracking/dbmodels/models.py",
      'relationship("SqlExperiment"', 'relationship("SqlExperimen"'),
-    ("mlflow_store/store/tracking/sqlalchemy_store.py",
+    ("mlflow_store/mlflow/store/tracking/sqlalchemy_store.py",
      "filter_by(run_uuid=run_id, key=metric_key)", "filter_by(run_uid=run_id, key=metric_key)"),
 ]
 

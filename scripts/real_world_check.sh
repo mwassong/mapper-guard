@@ -33,7 +33,9 @@ fetch() {  # $1=github repo  $2=local name  $3=subdir to keep
     rm -rf "$WORK/.src_$2"
     git clone -q --depth 1 "https://github.com/$1.git" "$WORK/.src_$2"
     mkdir -p "$pristine"
-    rsync -a --include='*/' --include='*.py' --exclude='*' "$WORK/.src_$2/$3" "$pristine/"
+    # --relative keeps the package path (mlflow/store/...), so absolute imports like
+    # `from mlflow.store.db.base_sql_model import Base` still resolve, as they do in a real checkout.
+    (cd "$WORK/.src_$2" && rsync -a --relative --include='*/' --include='*.py' --exclude='*' "./$3" "$pristine/")
     rm -rf "$WORK/.src_$2"
   fi
 }
@@ -67,7 +69,10 @@ run() {  # $1=project  $2=subdir to inspect -> warning count, or ERROR:* if it d
   python3 - "$out/SqlaReference.json" <<'PY'
 import json, os, sys
 p = sys.argv[1]
-print(len(json.load(open(p))["problems"]) if os.path.exists(p) else 0)
+# Distinct (file, offset, message): the batch runner occasionally emits an identical entry twice
+# (seen once, not reproducible; the editor reports it once - see testEachProblemReportedExactlyOnce).
+probs = json.load(open(p))["problems"] if os.path.exists(p) else []
+print(len({(q.get("file"), q.get("offset"), q.get("description")) for q in probs}))
 PY
 }
 
@@ -76,7 +81,7 @@ fetch CTFd/CTFd ctfd_py CTFd
 fetch mlflow/mlflow mlflow_store mlflow/store
 
 # project:subdir:expected-warnings-when-planted
-SCOPES=("ctfd_py:CTFd/models:2" "ctfd_py:CTFd/api/v1:1" "mlflow_store:store/tracking:3")
+SCOPES=("ctfd_py:CTFd/models:2" "ctfd_py:CTFd/api/v1:1" "mlflow_store:mlflow/store/tracking:3")
 
 fail=0
 echo "== phase 1: pristine code (expect 0 warnings)"

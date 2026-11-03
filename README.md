@@ -13,11 +13,14 @@ Catches broken SQLAlchemy string references while you type — the ones that oth
 
 Plus Ctrl+click navigation and completion inside all of those strings.
 
-## Verification (2026-09-21, PyCharm 2026.2.3, headless `inspect.sh`)
-- Synthetic project: 10/10 planted errors caught, 0 false positives across annotation-only targets, dotted
-  class names, mixin columns, `Table()` objects, DB-column-name overrides, self-references and duplicate model names.
-- Real codebases, 3 typos planted in each: **MLflow** tracking store (58 models) 3/3, **CTFd** (48 models,
-  Flask-SQLAlchemy) 3/3. **0 false positives** in either.
+## Verification (every release)
+- **Unit tests** (`./gradlew test`): 29 tests. Every rule has "must flag" and "must NOT flag" cases, plus
+  navigation, completion, exactly-once reporting and indexing-time safety.
+- **Real code** (`scripts/real_world_check.sh`): MLflow and CTFd, headless PyCharm. 0 warnings on pristine
+  code, and 6/6 planted typos caught.
+- **Real install** (`scripts/installed_check.sh`): brand-new IDE profile, an interpreter with SQLAlchemy and
+  Flask-SQLAlchemy installed, a library that declares its own table; then uninstall.
+- **JetBrains Plugin Verifier** and **ktlint** on every push (GitHub Actions).
 
 ## Build
 ```

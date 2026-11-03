@@ -1,6 +1,7 @@
 package sqlatoolkit
 
 import com.intellij.codeInsight.lookup.LookupElementBuilder
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.util.TextRange
 import com.intellij.patterns.PlatformPatterns
 import com.intellij.psi.PsiElement
@@ -9,8 +10,11 @@ import com.intellij.psi.PsiReferenceBase
 import com.intellij.psi.PsiReferenceContributor
 import com.intellij.psi.PsiReferenceProvider
 import com.intellij.psi.PsiReferenceRegistrar
+import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.ProcessingContext
+import com.jetbrains.python.psi.PyClass
 import com.jetbrains.python.psi.PyStringLiteralExpression
+import com.jetbrains.python.psi.stubs.PyClassNameIndex
 
 /** Ctrl+click and completion inside SQLAlchemy string references. Soft: the inspection owns the warnings. */
 class SqlaReferenceContributor : PsiReferenceContributor() {
@@ -43,7 +47,16 @@ private abstract class SqlaRef(lit: PyStringLiteralExpression, range: TextRange)
 }
 
 private class ClassRef(lit: PyStringLiteralExpression, range: TextRange) : SqlaRef(lit, range) {
-    override fun resolve(): PsiElement? = model.findClass(value, element)
+    // Same notion of "a class with this name" as the inspection: mapped models first, then any project class
+    // (imperative mapping, __table__ classes), then a class nested in this file.
+    override fun resolve(): PsiElement? {
+        model.findClass(value, element)?.let { return it }
+        val simple = value.substringAfterLast('.')
+        if (!DumbService.isDumb(element.project)) {
+            PyClassNameIndex.find(simple, element.project, false).firstOrNull()?.let { return it }
+        }
+        return PsiTreeUtil.findChildrenOfType(element.containingFile, PyClass::class.java).firstOrNull { it.name == simple }
+    }
     override fun getVariants(): Array<Any> =
         model.classes.keys.sorted().map { LookupElementBuilder.create(it).withTypeText("mapped class") }.toTypedArray()
 }

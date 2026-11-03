@@ -21,6 +21,9 @@
     <p>Not affiliated with or endorsed by the SQLAlchemy project.</p>
     ]]></description>
     <change-notes><![CDATA[
+    <p><b>0.1.3</b> &mdash; tables declared by installed libraries (e.g. Flask-AppBuilder's <code>ab_user</code>) are
+    recognised; f-strings and concatenated strings are skipped instead of misread; Ctrl+click works for imperatively
+    mapped classes; faster first run on large projects; no errors while the IDE is indexing.</p>
     <p><b>0.1.2</b> &mdash; columns built by helper functions (<code>*timestamps()</code>, <code>id = uuid_pk()</code>)
     are recognised, and other libraries' <code>Table</code> classes (e.g. rich) no longer switch off checks.</p>
     <p><b>0.1.1</b> &mdash; fewer false alarms. Now stays quiet (instead of guessing) for: table names computed by
