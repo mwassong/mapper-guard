@@ -1,19 +1,29 @@
 <idea-plugin>
-    <id>sqlatoolkit.sqlalchemy-toolkit</id>
-    <name>SQLAlchemy Toolkit</name>
-    <vendor>SQLAlchemy Toolkit</vendor>
+    <!-- The ID is permanent once uploaded to JetBrains Marketplace. Do not change it. -->
+    <id>io.github.mwassong.mapper-guard</id>
+    <name>Mapper Guard</name>
+    <vendor url="https://github.com/mwassong/mapper-guard">Mike Wassong</vendor>
     <description><![CDATA[
-    Catches broken SQLAlchemy string references while you type &mdash; the ones that otherwise only fail at app
-    startup or query time:
+    <p>Catches broken <b>SQLAlchemy</b> string references while you type &mdash; the ones that otherwise only
+    fail when your app starts or a query runs.</p>
     <ul>
       <li><code>relationship("Usre")</code> &mdash; unknown mapped class</li>
       <li><code>back_populates="adreses"</code> &mdash; no such attribute on the target model</li>
       <li><code>ForeignKey("usres.id")</code> &mdash; unknown table or column</li>
       <li><code>secondary="user_rolez"</code> &mdash; unknown association table</li>
-      <li><code>query(User).filter_by(nmae=...)</code> &mdash; no such column</li>
+      <li><code>session.query(User).filter_by(nmae=...)</code> and Flask-SQLAlchemy's
+          <code>User.query.filter_by(...)</code> &mdash; no such column</li>
     </ul>
-    Plus Ctrl+click navigation and completion inside all of those strings.
+    <p>Also adds <b>Ctrl+click navigation</b> and <b>completion</b> inside all of those strings.</p>
+    <p>Built to stay quiet when your code is right: it only checks calls that resolve to SQLAlchemy, understands
+    database column names that differ from attribute names, mixins, and duplicate model names across files.
+    Tested against the MLflow and CTFd codebases with zero false alarms.</p>
+    <p>Not affiliated with or endorsed by the SQLAlchemy project.</p>
     ]]></description>
+    <change-notes><![CDATA[
+    <p><b>0.1.0</b> &mdash; first release: checks for <code>relationship</code>, <code>back_populates</code>,
+    <code>secondary</code>, <code>ForeignKey</code> and <code>filter_by</code>, with navigation and completion.</p>
+    ]]></change-notes>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.python</depends>
     <extensions defaultExtensionNs="com.intellij">

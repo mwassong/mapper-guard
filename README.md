@@ -1,4 +1,4 @@
-# SQLAlchemy Toolkit (PyCharm plugin)
+# Mapper Guard — catch broken SQLAlchemy string references in PyCharm
 
 Catches broken SQLAlchemy string references while you type — the ones that otherwise only fail at app startup
 (mapper configuration) or query time:
@@ -21,6 +21,6 @@ Plus Ctrl+click navigation and completion inside all of those strings.
 
 ## Build
 ```
-JAVA_HOME=<jdk21> ./gradlew buildPlugin      # -> build/distributions/sqlalchemy-toolkit-<ver>.zip
+JAVA_HOME=<jdk21> ./gradlew buildPlugin      # -> build/distributions/mapper-guard-<ver>.zip
 ```
 Builds against a local PyCharm (`PYCHARM_HOME`, default: the side-hustle test rig).

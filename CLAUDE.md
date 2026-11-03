@@ -1,4 +1,4 @@
-# SQLAlchemy Toolkit — working rules
+# Mapper Guard — working rules
 
 Inherits the account-wide quality bar in `~/.claude/CLAUDE.md`. Specific to this repo:
 

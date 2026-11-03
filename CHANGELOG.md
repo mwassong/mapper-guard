@@ -1,4 +1,4 @@
-# Changelog
+# Changelog — Mapper Guard
 
 ## 0.1.0 — unreleased
 First version. Catches SQLAlchemy string references that otherwise fail only at runtime:

@@ -5,7 +5,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.19.0"
 }
 
-group = "sqlatoolkit"
+group = "io.github.mwassong"
 version = "0.1.0"
 
 repositories {

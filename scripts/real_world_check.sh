@@ -13,7 +13,7 @@ set -euo pipefail
 
 RIG="${RIG:-/home/yamu/side-hustle/.tools}"
 PYCHARM="$RIG/pycharm-2026.2.3"
-PLUGIN_ZIP="$(cd "$(dirname "$0")/.." && pwd)/build/distributions/sqlalchemy-toolkit-0.1.0.zip"
+PLUGIN_ZIP="$(cd "$(dirname "$0")/.." && pwd)/build/distributions/mapper-guard-0.1.0.zip"
 WORK="$RIG/real"
 export PYCHARM_VM_OPTIONS="$RIG/pc.vmoptions"
 
@@ -21,7 +21,7 @@ export PYCHARM_VM_OPTIONS="$RIG/pc.vmoptions"
 [[ -f "$PLUGIN_ZIP" ]] || { echo "build the plugin first: ./gradlew buildPlugin"; exit 2; }
 
 echo "== installing plugin into the headless IDE"
-rm -rf "$RIG/pcconf/plugins/sqlalchemy-toolkit"
+rm -rf "$RIG/pcconf/plugins/mapper-guard"
 python3 -c "import zipfile,sys;zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$PLUGIN_ZIP" "$RIG/pcconf/plugins"
 
 # A pristine copy is kept per project and every phase restores from it, so a crashed run can never

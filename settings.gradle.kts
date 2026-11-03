@@ -1,1 +1,1 @@
-rootProject.name = "sqlalchemy-toolkit"
+rootProject.name = "mapper-guard"
