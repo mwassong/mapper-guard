@@ -1,0 +1,25 @@
+<idea-plugin>
+    <id>sqlatoolkit.sqlalchemy-toolkit</id>
+    <name>SQLAlchemy Toolkit</name>
+    <vendor>SQLAlchemy Toolkit</vendor>
+    <description><![CDATA[
+    Catches broken SQLAlchemy string references while you type &mdash; the ones that otherwise only fail at app
+    startup or query time:
+    <ul>
+      <li><code>relationship("Usre")</code> &mdash; unknown mapped class</li>
+      <li><code>back_populates="adreses"</code> &mdash; no such attribute on the target model</li>
+      <li><code>ForeignKey("usres.id")</code> &mdash; unknown table or column</li>
+      <li><code>secondary="user_rolez"</code> &mdash; unknown association table</li>
+      <li><code>query(User).filter_by(nmae=...)</code> &mdash; no such column</li>
+    </ul>
+    Plus Ctrl+click navigation and completion inside all of those strings.
+    ]]></description>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.python</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <localInspection language="Python" shortName="SqlaReference" displayName="Broken SQLAlchemy string reference"
+                         groupName="SQLAlchemy" enabledByDefault="true" level="WARNING"
+                         implementationClass="sqlatoolkit.SqlaReferenceInspection"/>
+        <psi.referenceContributor language="Python" implementation="sqlatoolkit.SqlaReferenceContributor"/>
+    </extensions>
+</idea-plugin>
