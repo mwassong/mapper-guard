@@ -23,14 +23,11 @@ val hasLocalIde = file(pycharmHome).isDirectory
 
 dependencies {
     intellijPlatform {
-        if (hasLocalIde) {
-            local(pycharmHome)
-            bundledPlugin("PythonCore")
-        } else {
-            // UNVERIFIED until CI runs once — no GitHub remote exists for this repo yet.
-            intellijIdeaCommunity("2026.2")
-            plugin("PythonCore", "262.10968.63")
-        }
+        if (hasLocalIde) local(pycharmHome)
+        // From 2025.3 JetBrains ships unified IDEs: there is no ideaIC/PyCharm Community 2026.x, so CI
+        // downloads the same PyCharm release the local rig uses (the first CI run failed on ideaIC:2026.2).
+        else pycharm("2026.2.3")
+        bundledPlugin("PythonCore")
         testFramework(TestFrameworkType.Platform)
     }
     testImplementation("junit:junit:4.13.2")
