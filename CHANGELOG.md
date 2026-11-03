@@ -1,6 +1,6 @@
 # Changelog — Mapper Guard
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-11-03
 First version. Catches SQLAlchemy string references that otherwise fail only at runtime:
 - `relationship("Class")` — unknown mapped class
 - `back_populates="attr"` — no such attribute on the target model
