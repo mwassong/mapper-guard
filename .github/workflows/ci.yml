@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+
+      # No local PyCharm on the runner, so the build falls back to a downloaded platform
+      # (see build.gradle.kts). UNVERIFIED until this repo is pushed to GitHub and CI runs once.
+      - name: Unit tests
+        run: ./gradlew test
+
+      - name: JetBrains plugin verifier
+        run: ./gradlew verifyPlugin
+
+      - name: Build plugin
+        run: ./gradlew buildPlugin
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plugin-and-reports
+          path: |
+            build/distributions/*.zip
+            build/reports/**

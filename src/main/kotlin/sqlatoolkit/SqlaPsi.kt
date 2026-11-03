@@ -23,6 +23,7 @@ object SqlaPsi {
         val argList = (kw?.parent ?: parent) as? PyArgumentList ?: return null
         val call = argList.parent as? PyCallExpression ?: return null
         val name = SqlaModel.calleeName(call) ?: return null
+        if (!isSqlalchemyCall(call)) return null
         return when {
             name in REL && kw == null && call.arguments.firstOrNull() === lit -> SqlaSite.RelationshipTarget(call)
             name in REL && kw?.keyword == "back_populates" -> SqlaSite.BackPopulates(call)
@@ -33,6 +34,20 @@ object SqlaPsi {
     }
 
     private val REL = setOf("relationship", "relation")
+
+    /**
+     * True when the callee resolves into SQLAlchemy (or Flask-SQLAlchemy), so a project's own function
+     * named `relationship()` is left alone. If the call does not resolve at all — no interpreter
+     * configured, or the library is not installed — we assume it IS SQLAlchemy, because the plugin
+     * should still work in a project that has not been set up yet.
+     */
+    fun isSqlalchemyCall(call: PyCallExpression): Boolean {
+        val resolved = (call.callee as? PyReferenceExpression)?.reference?.resolve() ?: return true
+        val qualified = (resolved as? PyQualifiedNameOwner)?.qualifiedName
+        if (qualified != null) return qualified.startsWith("sqlalchemy") || qualified.startsWith("flask_sqlalchemy")
+        val path = resolved.containingFile?.virtualFile?.path ?: return true
+        return "sqlalchemy" in path
+    }
 
     /**
      * The class a relationship points at: its first argument (string, class, or lambda returning a class),
