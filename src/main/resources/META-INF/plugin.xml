@@ -21,6 +21,11 @@
     <p>Not affiliated with or endorsed by the SQLAlchemy project.</p>
     ]]></description>
     <change-notes><![CDATA[
+    <p><b>0.1.4</b> &mdash; Flask-SQLAlchemy's automatic table names (e.g. <code>user_role</code>) are known;
+    attributes created by <code>backref=</code> are recognised in <code>filter_by</code> and
+    <code>back_populates</code>; classes imported from libraries count as known; a table name that merely appears in a
+    library (e.g. "user", "order") no longer hides an unknown-table warning &mdash; only a library that actually declares
+    the table does.</p>
     <p><b>0.1.3</b> &mdash; tables declared by installed libraries (e.g. Flask-AppBuilder's <code>ab_user</code>) are
     recognised; f-strings and concatenated strings are skipped instead of misread; Ctrl+click works for imperatively
     mapped classes; faster first run on large projects; no errors while the IDE is indexing.</p>

@@ -14,12 +14,17 @@ Catches broken SQLAlchemy string references while you type — the ones that oth
 Plus Ctrl+click navigation and completion inside all of those strings.
 
 ## Verification (every release)
-- **Unit tests** (`./gradlew test`): 29 tests. Every rule has "must flag" and "must NOT flag" cases, plus
+- **Unit tests** (`./gradlew test`): 37 tests. Every rule has "must flag" and "must NOT flag" cases, plus
   navigation, completion, exactly-once reporting and indexing-time safety.
 - **Real code** (`scripts/real_world_check.sh`): MLflow and CTFd, headless PyCharm. 0 warnings on pristine
   code, and 6/6 planted typos caught.
 - **Real install** (`scripts/installed_check.sh`): brand-new IDE profile, an interpreter with SQLAlchemy and
   Flask-SQLAlchemy installed, a library that declares its own table; then uninstall.
+- **Corpus sweep** (`scripts/corpus_check.sh`): Superset, Airflow, Redash, Flask-AppBuilder, Indico, Lemur and
+  FlaskBB (~4,400 files the plugin was never developed against). Zero false alarms; it found two real stale
+  `ForeignKey("policy.id")` references in Lemur.
+- **Mutation check** (`scripts/mutation_check.py`): 21 deliberate bugs, every one caught by the tests or the
+  install check.
 - **JetBrains Plugin Verifier** and **ktlint** on every push (GitHub Actions).
 
 ## Build

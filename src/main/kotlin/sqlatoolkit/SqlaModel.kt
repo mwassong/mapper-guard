@@ -3,6 +3,7 @@ package sqlatoolkit
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiElement
 import com.intellij.psi.search.GlobalSearchScope
@@ -55,7 +56,18 @@ class SqlaModel private constructor(
     val tables: Map<String, List<SqlaTable>>,
     /** False when some table's name can't be determined statically; "unknown table" is then never reported. */
     val tablesComplete: Boolean,
+    /** Class name -> attribute names other classes add to it via `relationship(..., backref="x")`. */
+    private val backrefsByTarget: Map<String, Set<String>> = emptyMap(),
+    /** Backref names whose target class couldn't be determined: accepted on every class. */
+    private val backrefsUnknownTarget: Set<String> = emptySet(),
 ) {
+    /** Attributes `cls` (or an ancestor) gains from backrefs declared on other classes. */
+    fun backrefsOf(cls: PyClass): Set<String> {
+        val out = HashSet(backrefsUnknownTarget)
+        for (c in listOf(cls) + cls.getAncestorClasses(null)) c.name?.let { backrefsByTarget[it]?.let(out::addAll) }
+        return out
+    }
+
     /** Per-file facts. Depends only on the file's own text, so it is safe to cache against the file. */
     private class FileFacts(
         val mappedClasses: List<PyClass>,
@@ -63,6 +75,8 @@ class SqlaModel private constructor(
         /** Classes with no table name of their own: their name may be inherited, resolved at aggregate time. */
         val inheritsTableName: List<PyClass>,
         val hasDynamicTableNames: Boolean,
+        /** (relationship target class name or null if unknown) -> backref attribute name it creates on that class. */
+        val backrefs: List<Pair<String?, String>>,
     )
 
     companion object {
@@ -123,22 +137,34 @@ class SqlaModel private constructor(
             val classes = HashMap<String, MutableList<PyClass>>()
             val tables = HashMap<String, MutableList<SqlaTable>>()
             var complete = true
+            val backrefsByTarget = HashMap<String, MutableSet<String>>()
+            val backrefsUnknown = HashSet<String>()
             for (file in candidateFiles(project)) {
                 ProgressManager.checkCanceled()
                 val facts = factsOf(file)
                 for (cls in facts.mappedClasses) cls.name?.let { classes.getOrPut(it) { mutableListOf() }.add(cls) }
                 for (t in facts.tables) tables.getOrPut(t.name) { mutableListOf() }.add(t)
                 if (facts.hasDynamicTableNames) complete = false
+                for ((target, name) in facts.backrefs) {
+                    if (target == null) backrefsUnknown.add(name) else backrefsByTarget.getOrPut(target) { HashSet() }.add(name)
+                }
                 // A table name inherited across files (e.g. from a library base) can only be resolved here.
                 for (cls in facts.inheritsTableName) {
+                    val flask = isFlaskModel(cls)
+                    // Flask-SQLAlchemy names db.Model subclasses itself when __tablename__ isn't set. Registering the
+                    // derived name even for single-table-inheritance children (which reuse the parent table) is
+                    // harmless: an extra known name can only remove warnings, never add one.
+                    if (flask) cls.name?.let {
+                        tables.getOrPut(camelToSnake(it)) { mutableListOf() }.add(SqlaTable(camelToSnake(it), cls, cls, null))
+                    }
                     when (val inherited = inheritedTableName(cls)) {
-                        null -> if (!ancestorsKnown(cls)) complete = false
+                        null -> if (!flask && !ancestorsKnown(cls)) complete = false
                         else -> tables.getOrPut(inherited) { mutableListOf() }.add(SqlaTable(inherited, cls, cls, null))
                     }
                 }
             }
             LOG.debug("SqlaModel: ${classes.size} class names, ${tables.size} tables, complete=$complete")
-            return SqlaModel(classes, tables, complete)
+            return SqlaModel(classes, tables, complete, backrefsByTarget, backrefsUnknown)
         }
 
         /**
@@ -158,23 +184,52 @@ class SqlaModel private constructor(
             return files
         }
 
+        /** Table names that installed libraries DECLARE with a literal name (not merely mention). */
+        class LibraryTables(val names: Set<String>)
+
+        private val LIBRARY_TABLES = Key.create<CachedValue<LibraryTables>>("mapperguard.libraryTables")
+
         /**
-         * Whether a library (site-packages, the SDK) mentions this table name in a string literal. Libraries can
-         * declare tables a project references but never subclasses (Flask-AppBuilder's `ab_user`, Airflow's
-         * tables), and those are invisible to the project scan.
+         * Libraries can declare tables a project references but never subclasses (Flask-AppBuilder's `ab_user`,
+         * Airflow's tables). These come from the same per-file extraction as project code, restricted by the word
+         * index to library files that can declare a table at all. A name merely *appearing* in a library string is
+         * not enough: "user" and "order" appear in dozens of library files, and accepting them would hide the most
+         * common mistake there is, `ForeignKey("user.id")` for a table called `users`.
+         * Recomputed when project roots (interpreter, installed packages) change.
          */
-        fun mentionedInLibraries(project: Project, tableName: String): Boolean {
-            if (DumbService.isDumb(project)) return true // can't look; "mentioned" keeps the warning quiet
-            if (tableName.isEmpty() || !tableName.all { it.isLetterOrDigit() || it == '_' }) return false
-            var found = false
-            PsiSearchHelper.getInstance(project).processAllFilesWithWordInLiterals(
-                tableName,
-                ProjectScope.getLibrariesScope(project),
-            ) {
-                found = true
-                false
+        fun libraryTables(project: Project): LibraryTables {
+            if (DumbService.isDumb(project)) return LibraryTables(emptySet())
+            return CachedValuesManager.getManager(project).getCachedValue(project, LIBRARY_TABLES, {
+                CachedValueProvider.Result.create(computeLibraryTables(project), ProjectRootManager.getInstance(project))
+            }, false)
+        }
+
+        private fun computeLibraryTables(project: Project): LibraryTables {
+            val scope = GlobalSearchScope.getScopeRestrictedByFileTypes(ProjectScope.getLibrariesScope(project), PythonFileType.INSTANCE)
+            val helper = PsiSearchHelper.getInstance(project)
+            val files = LinkedHashSet<PyFile>()
+            // A table is declared with __tablename__, or with Table(name, metadata, ...).
+            helper.processAllFilesWithWord("__tablename__", scope, { f ->
+                (f as? PyFile)?.let(files::add)
+                true
+            }, true)
+            val withTable = HashSet<PyFile>()
+            helper.processAllFilesWithWord("Table", scope, { f ->
+                (f as? PyFile)?.let(withTable::add)
+                true
+            }, true)
+            helper.processAllFilesWithWord("metadata", scope, { f ->
+                (f as? PyFile)?.takeIf { it in withTable }?.let(files::add)
+                true
+            }, false)
+            // Library internals call Table(variable, metadata) all the time (SQLAlchemy's own reflection code), so a
+            // library's "dynamic names" flag means nothing here: only literal declarations count.
+            val names = HashSet<String>()
+            for (file in files) {
+                ProgressManager.checkCanceled()
+                factsOf(file).tables.mapTo(names) { it.name }
             }
-            return found
+            return LibraryTables(names)
         }
 
         private fun extract(file: PyFile): FileFacts {
@@ -225,7 +280,19 @@ class SqlaModel private constructor(
                 }
                 tables.add(SqlaTable(name, call, null, if (known && cols.isNotEmpty()) cols else null))
             }
-            return FileFacts(mapped, tables, inherits, dynamic)
+            // `relationship("Target", backref="x")` / `backref=backref("x", ...)` adds attribute x to Target at runtime.
+            val backrefs = ArrayList<Pair<String?, String>>()
+            for (call in PsiTreeUtil.findChildrenOfType(file, PyCallExpression::class.java)) {
+                if (calleeName(call) !in setOf("relationship", "relation")) continue
+                val arg = call.getKeywordArgument("backref") ?: continue
+                val name = when (arg) {
+                    is PyStringLiteralExpression -> arg.stringValue
+                    is PyCallExpression -> (arg.arguments.firstOrNull() as? PyStringLiteralExpression)?.stringValue
+                    else -> null
+                } ?: continue
+                backrefs.add(SqlaPsi.relationshipTargetName(call)?.substringAfterLast('.') to name)
+            }
+            return FileFacts(mapped, tables, inherits, dynamic, backrefs)
         }
 
         private sealed class TableName {
@@ -240,6 +307,15 @@ class SqlaModel private constructor(
             val attr = cls.findClassAttribute("__tablename__", false, null) ?: return TableName.None
             val literal = (attr.findAssignedValue() as? PyStringLiteralExpression)?.stringValue
             return if (literal != null) TableName.Literal(literal) else TableName.Dynamic
+        }
+
+        /** Flask-SQLAlchemy's `camel_to_snake_case` (flask_sqlalchemy/model.py, 3.1.1), character for character. */
+        fun camelToSnake(name: String): String =
+            Regex("((?<=[a-z0-9])[A-Z]|(?!^)[A-Z](?=[a-z]))").replace(name) { "_" + it.value }.lowercase().trimStart('_')
+
+        /** Subclasses (directly or not) Flask-SQLAlchemy's `db.Model`: a qualified `<something>.Model` base. */
+        private fun isFlaskModel(cls: PyClass): Boolean = (listOf(cls) + cls.getAncestorClasses(null)).any { c ->
+            c.superClassExpressions.any { e -> e is PyReferenceExpression && e.referencedName == "Model" && e.qualifier != null }
         }
 
         private fun inheritedTableName(cls: PyClass): String? =
@@ -310,6 +386,7 @@ class SqlaModel private constructor(
                 c.classAttributes.mapNotNullTo(out) { it.name }
                 c.methods.filter { m -> ATTRIBUTE_DECORATORS.any { hasDecorator(m, it) } }.mapNotNullTo(out) { it.name }
             }
+            out.addAll(get(cls.project).backrefsOf(cls)) // attributes added to this class by backrefs elsewhere
             return out
         }
 

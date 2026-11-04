@@ -391,6 +391,137 @@ class SqlaReferenceInspectionTest : BasePlatformTestCase() {
         assertEquals("duplicates: ${hits.map { it.startOffset }}", 1, hits.size)
     }
 
+    // ---- final pass: corpus sweep (Indico, Superset) and mutation-testing gaps -------------------
+    fun testBackrefCreatedAttributesAreKnown() = quiet(
+        "survey.py" to """
+        from sqlalchemy import ForeignKey
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, backref, Session
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Survey(Base):
+            __tablename__ = "surveys"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            items = relationship("SurveyItem", backref=backref("survey", lazy=True))
+            notes = relationship("Note", backref="owner")
+
+        class SurveyItem(Base):
+            __tablename__ = "items"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            survey_id: Mapped[int] = mapped_column(ForeignKey("surveys.id"))
+
+        class SurveySection(SurveyItem):   # inherits the backref-created attribute
+            __mapper_args__ = {"polymorphic_identity": "section"}
+
+        class Note(Base):
+            __tablename__ = "notes"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            survey_id: Mapped[int] = mapped_column(ForeignKey("surveys.id"))
+
+        def q(s: Session, sv: Survey) -> None:
+            s.query(SurveySection).filter_by(survey=sv)
+            s.query(Note).filter_by(owner=sv)
+        """,
+    )
+
+    fun testBackrefDoesNotHideRealTypos() = check(
+        """
+        def q(s: Session) -> None:
+            s.query(User).filter_by(<warning descr="'User' has no attribute 'surveyy'">surveyy</warning>=1)
+        """,
+    )
+
+    fun testClassImportedFromUninstalledLibraryIsNotUnknown() = quiet(
+        "views.py" to "from flask_appbuilder.security.sqla.models import Group\n",
+        "subjects.py" to """
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Subject(Base):
+            __tablename__ = "subjects"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            group = relationship("Group")
+        """,
+    )
+
+    fun testUnmappedClassInAnotherFileIsNotUnknown() = quiet(
+        "plain2.py" to "class Plain2:\n    pass\n",
+        "user_of_plain.py" to """
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Holder(Base):
+            __tablename__ = "holders"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            p = relationship("Plain2")
+        """,
+    )
+
+    fun testSchemaQualifiedForeignKeyColumn() = check(
+        """
+        class A(Base):
+            __tablename__ = "a10"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            x: Mapped[int] = mapped_column(ForeignKey("auth.users.<warning descr="Table 'users' has no column 'idd'">idd</warning>"))
+        """,
+    )
+
+    fun testTypingListAnnotationTarget() = check(
+        """
+        from typing import List
+        class A(Base):
+            __tablename__ = "a11"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            us: Mapped[List["User"]] = relationship(back_populates="<warning descr="'User' has no attribute 'nope' for back_populates">nope</warning>")
+        """,
+    )
+
+    fun testReflectedTableWithSomeColumnsIsStillUnknown() = quiet(
+        "reflected2.py" to """
+        from sqlalchemy import Column, ForeignKey, Integer, Table
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+        class Base(DeclarativeBase):
+            pass
+
+        acct = Table("acct", Base.metadata, Column("id", Integer, primary_key=True), autoload_with=None)
+
+        class Uses2(Base):
+            __tablename__ = "uses2"
+            id: Mapped[int] = mapped_column(primary_key=True)
+            owner: Mapped[int] = mapped_column(ForeignKey("acct.owner_id"))
+        """,
+    )
+
+    fun testFlaskSqlalchemyAutomaticTableNames() {
+        myFixture.configureByText(
+            "flaskauto.py",
+            """
+            from flask_sqlalchemy import SQLAlchemy
+
+            db = SQLAlchemy()
+
+            class UserRole(db.Model):          # Flask-SQLAlchemy names this table "user_role"
+                id = db.Column(db.Integer, primary_key=True)
+
+            class HTTPServerLog(db.Model):     # -> "http_server_log"
+                id = db.Column(db.Integer, primary_key=True)
+
+            class Grant(db.Model):
+                id = db.Column(db.Integer, primary_key=True)
+                role_id = db.Column(db.Integer, db.ForeignKey("user_role.id"))
+                log_id = db.Column(db.Integer, db.ForeignKey("http_server_log.id"))
+                bad_id = db.Column(db.Integer, db.ForeignKey("<warning descr="Unknown table 'user_roll'">user_roll</warning>.id"))
+            """.trimIndent(),
+        )
+        myFixture.checkHighlighting(true, false, false)
+    }
+
     // ---- navigation and completion (advertised features, previously untested) -----------------
     private fun atCaret(code: String) {
         models()

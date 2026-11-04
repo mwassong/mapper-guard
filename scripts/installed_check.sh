@@ -18,7 +18,7 @@ PLUGIN_ZIP="$ROOT/build/distributions/mapper-guard-$VERSION.zip"
 WORK="$RIG/installed"
 PROFILE="$WORK/profile"            # wiped every run: a genuinely clean profile
 PROJ="$WORK/project"
-WANT_PLANTED=6
+WANT_PLANTED=7
 
 [[ -x "$PYCHARM/bin/inspect.sh" ]] || { echo "PyCharm not found at $PYCHARM"; exit 2; }
 [[ -f "$PLUGIN_ZIP" ]] || { echo "build first: ./gradlew buildPlugin"; exit 2; }
@@ -136,6 +136,10 @@ for old, new in [
     ('db.ForeignKey("users.id")', 'db.ForeignKey("users.idd")'),                 # FK column via db.ForeignKey
     ('ForeignKey("orders.created_at")', 'ForeignKey("orders.created_att")'),     # column from RESOLVED library mixin
     ('filter_by(user_id=1)', 'filter_by(usr_id=1)'),                             # Flask Model.query.filter_by
+    # Singular/plural: "order" is a common word in library string literals (10 files with just SQLAlchemy and
+    # Flask installed), but no library DECLARES an "order" table, so it must still be reported.
+    ('order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))',
+     'order_id: Mapped[int] = mapped_column(ForeignKey("order.id"))'),
 ]:
     assert s.count(old) == 1, ("planting failed", old)
     s = s.replace(old, new)

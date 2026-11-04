@@ -19,7 +19,12 @@ JAVA_HOME=$(ls -d ~/.local/opt/jdk-21*) ./gradlew ktlintCheck test verifyPlugin 
    check `SqlaModel built: N classes` in `pclog/idea.log` and that `.idea/` was deleted first.
 4. **Installed check**: `scripts/installed_check.sh` must PASS (fresh profile, real interpreter with SQLAlchemy,
    library-declared table, uninstall).
-5. **Version bumped** in `build.gradle.kts` + `CHANGELOG.md` entry + git tag.
+5. **Corpus sweep**: `scripts/corpus_check.sh` over 7 unseen projects (~4,400 files). Every control caught, no
+   plugin exceptions, and every project-code warning classified. Current baseline: only Lemur's 2 real
+   `ForeignKey("policy.id")` bugs.
+6. **Mutation check**: `python3 scripts/mutation_check.py` - every mutation killed, except [integration-only]
+   ones, which must make `installed_check.sh` FAIL when applied.
+7. **Version bumped** in `build.gradle.kts` + `CHANGELOG.md` entry + git tag.
 
 ## Rules learned the hard way (do not regress)
 - **Match by resolution, not by name.** A project's own `relationship()` function must not be flagged;
@@ -33,6 +38,10 @@ JAVA_HOME=$(ls -d ~/.local/opt/jdk-21*) ./gradlew ktlintCheck test verifyPlugin 
 
 - **Unknown means quiet.** Dynamic table names, reflected tables and unresolvable base classes make the
   relevant check skip, never guess (`SqlaModel.tablesComplete`, `tableColumns() == null`, `attributesOf() == null`).
+- **Library tables count only if DECLARED with a literal name.** A name merely appearing in a library string is
+  not evidence ("user" is in 31 library files), and library `Table(variable, ...)` calls are internals, not tables.
+- **Flask-SQLAlchemy names tables itself** (`camel_to_snake_case`), and `backref=` adds attributes to the other
+  class. Both look like errors to a naive scan.
 - **Per-file facts only depend on their own file** (`SqlaModel.extract`). Anything that needs another file
   (inherited table names, ancestors) is resolved at aggregate or query time, or the cache goes stale.
 

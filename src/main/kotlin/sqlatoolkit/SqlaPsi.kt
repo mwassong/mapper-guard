@@ -85,7 +85,7 @@ object SqlaPsi {
     fun relationshipTarget(call: PyCallExpression, model: SqlaModel): PyClass? =
         relationshipTargetName(call)?.let { model.findClass(it, call) }
 
-    private fun relationshipTargetName(call: PyCallExpression): String? {
+    fun relationshipTargetName(call: PyCallExpression): String? {
         when (val first = call.arguments.firstOrNull { it !is PyKeywordArgument }) {
             is PyStringLiteralExpression -> return first.stringValue
             is PyReferenceExpression -> return first.referencedName

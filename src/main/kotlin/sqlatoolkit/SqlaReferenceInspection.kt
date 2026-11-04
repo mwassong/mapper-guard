@@ -5,11 +5,15 @@ import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.PsiSearchHelper
 import com.intellij.psi.util.PsiTreeUtil
+import com.jetbrains.python.PythonFileType
 import com.jetbrains.python.psi.PyCallExpression
 import com.jetbrains.python.psi.PyClass
 import com.jetbrains.python.psi.PyElementVisitor
 import com.jetbrains.python.psi.PyExpression
+import com.jetbrains.python.psi.PyFile
 import com.jetbrains.python.psi.PyKeywordArgument
 import com.jetbrains.python.psi.PyReferenceExpression
 import com.jetbrains.python.psi.PyStringLiteralExpression
@@ -115,13 +119,33 @@ class SqlaReferenceInspection : LocalInspectionTool() {
         val simple = ref.substringAfterLast('.')
         if (SqlaModel.get(context.project).findClasses(ref).isNotEmpty()) return true
         if (PyClassNameIndex.find(simple, context.project, true).isNotEmpty()) return true
-        return PsiTreeUtil.findChildrenOfType(context.containingFile, PyClass::class.java).any { it.name == simple }
+        if (PsiTreeUtil.findChildrenOfType(context.containingFile, PyClass::class.java).any { it.name == simple }) return true
+        return importedInProject(simple, context)
     }
 
-    /** Unknown only if the project doesn't declare it, all names are knowable, and no library mentions it. */
-    private fun isUnknownTable(model: SqlaModel, name: String, context: PsiElement): Boolean = model.tablesComplete &&
-        model.tableDeclarations(name).isEmpty() &&
-        !SqlaModel.mentionedInLibraries(context.project, name.substringAfterLast('.'))
+    /**
+     * The project imports a name like this somewhere (`from flask_appbuilder... import Group`). Covers classes from
+     * libraries that aren't installed or indexed: SQLAlchemy's registry will still find them at runtime.
+     */
+    private fun importedInProject(simple: String, context: PsiElement): Boolean {
+        val scope = GlobalSearchScope.getScopeRestrictedByFileTypes(
+            GlobalSearchScope.projectScope(context.project),
+            PythonFileType.INSTANCE,
+        )
+        var found = false
+        PsiSearchHelper.getInstance(context.project).processAllFilesWithWord(simple, scope, { f ->
+            val py = f as? PyFile
+            found = py != null && py.fromImports.any { stmt -> stmt.importElements.any { it.visibleName == simple } }
+            !found
+        }, true)
+        return found
+    }
+
+    /** Unknown only if the project doesn't declare it, all project table names are knowable, and no library declares it. */
+    private fun isUnknownTable(model: SqlaModel, name: String, context: PsiElement): Boolean {
+        if (!model.tablesComplete || model.tableDeclarations(name).isNotEmpty()) return false
+        return name.substringAfterLast('.') !in SqlaModel.libraryTables(context.project).names
+    }
 
     private fun warn(holder: ProblemsHolder, node: PyStringLiteralExpression, msg: String) =
         holder.registerProblem(node, node.stringValueTextRange, msg)

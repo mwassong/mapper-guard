@@ -1,5 +1,20 @@
 # Changelog — Mapper Guard
 
+## 0.1.4 — 2026-11-03
+Final review with new kinds of checks: a 7-project corpus sweep (Superset, Airflow, Redash, Flask-AppBuilder,
+Indico, Lemur, FlaskBB - ~4,400 files never seen before) and mutation testing.
+- `backref="x"` / `backref=backref("x")` attributes are known on the target class and its subclasses
+  (Indico: 3 false alarms on `filter_by(survey=...)`).
+- A relationship target imported anywhere in the project counts as existing even when its library isn't
+  installed (Superset `relationship("Group")` from Flask-AppBuilder).
+- Library tables: only tables a library actually DECLARES are accepted. 0.1.3 accepted any name that appeared in
+  a library string, which hid the most common mistake (`ForeignKey("user.id")` for table `users`; "user" appears
+  in 31 library files with only SQLAlchemy+Flask installed).
+- Flask-SQLAlchemy's automatic table names (`UserRole(db.Model)` -> `user_role`, using its exact
+  `camel_to_snake_case`) are known; Flask apps relying on them no longer get "Unknown table".
+- Corpus found 2 real bugs in Netflix Lemur: `ForeignKey("policy.id")` to a table its migrations dropped.
+- Tests 29 -> 37; mutation testing closes four gaps the suite had.
+
 ## 0.1.3 — 2026-11-03
 Third review pass, plus the checks that had been missing:
 - Tables declared only by an installed library (Flask-AppBuilder/Airflow `ab_user`) no longer flagged unknown.
