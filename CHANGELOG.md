@@ -1,5 +1,9 @@
 # Changelog — Mapper Guard
 
+## [Unreleased]
+- Fix #1: models declared with `__table__ = Table(...)` (hybrid mapping) no longer get false `filter_by()` /
+  `back_populates` warnings on their columns; a `__table__` whose columns can't be seen makes the check stay quiet.
+
 ## 0.1.5 — 2026-11-04 (first public release)
 - Marketplace "What's New" now describes the release instead of listing internal pre-release versions.
   No code changes from 0.1.4.

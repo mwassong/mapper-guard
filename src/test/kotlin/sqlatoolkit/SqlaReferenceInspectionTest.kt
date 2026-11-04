@@ -498,6 +498,79 @@ class SqlaReferenceInspectionTest : BasePlatformTestCase() {
         """,
     )
 
+    // ---- issue #1: hybrid declarative mapping, `__table__ = Table(...)` ------------------------------
+    // SQLAlchemy maps every column of __table__ onto the class, so those columns are attributes.
+    fun testHybridTableColumnsAreAttributes() = quiet(
+        "hybrid.py" to """
+        from sqlalchemy import Column, Integer, String, Table
+        from sqlalchemy.orm import DeclarativeBase, Session
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Account(Base):
+            __table__ = Table(
+                "accounts", Base.metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String(50)),
+            )
+
+        def find(session: Session, name: str):
+            return session.query(Account).filter_by(name=name).all()
+        """,
+    )
+
+    // __table__ bound to a variable, or built from columns we can't see: attributes unknown, stay quiet.
+    fun testHybridTableWithUnknownColumnsIsQuiet() = quiet(
+        "hybrid2.py" to """
+        from sqlalchemy import Column, Integer, String, Table
+        from sqlalchemy.orm import DeclarativeBase, Session
+
+        class Base(DeclarativeBase):
+            pass
+
+        accounts = Table("accounts2", Base.metadata, Column("id", Integer, primary_key=True))
+
+        def cols():
+            return [Column("name", String(50))]
+
+        class Account2(Base):
+            __table__ = accounts
+
+        class Account3(Base):
+            __table__ = Table("accounts3", Base.metadata, Column("id", Integer, primary_key=True), *cols())
+
+        class Account4(Base):
+            __table__ = Table("accounts4", Base.metadata, autoload_with=None)
+
+        def find(session: Session):
+            session.query(Account2).filter_by(name="x")
+            session.query(Account3).filter_by(name="x")
+            session.query(Account4).filter_by(name="x")
+        """,
+    )
+
+    // The columns are known exactly, so a typo on a hybrid-mapped class is still caught.
+    fun testHybridTableTypoStillFlagged() = quiet(
+        "hybrid3.py" to """
+        from sqlalchemy import Column, Integer, String, Table
+        from sqlalchemy.orm import DeclarativeBase, Session
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Account5(Base):
+            __table__ = Table(
+                "accounts5", Base.metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String(50)),
+            )
+
+        def find(session: Session):
+            session.query(Account5).filter_by(name="x", <warning descr="'Account5' has no attribute 'nmae'">nmae</warning>="x")
+        """,
+    )
+
     fun testFlaskSqlalchemyAutomaticTableNames() {
         myFixture.configureByText(
             "flaskauto.py",
