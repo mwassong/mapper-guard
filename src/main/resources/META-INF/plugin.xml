@@ -21,23 +21,11 @@
     <p>Not affiliated with or endorsed by the SQLAlchemy project.</p>
     ]]></description>
     <change-notes><![CDATA[
-    <p><b>0.1.4</b> &mdash; Flask-SQLAlchemy's automatic table names (e.g. <code>user_role</code>) are known;
-    attributes created by <code>backref=</code> are recognised in <code>filter_by</code> and
-    <code>back_populates</code>; classes imported from libraries count as known; a table name that merely appears in a
-    library (e.g. "user", "order") no longer hides an unknown-table warning &mdash; only a library that actually declares
-    the table does.</p>
-    <p><b>0.1.3</b> &mdash; tables declared by installed libraries (e.g. Flask-AppBuilder's <code>ab_user</code>) are
-    recognised; f-strings and concatenated strings are skipped instead of misread; Ctrl+click works for imperatively
-    mapped classes; faster first run on large projects; no errors while the IDE is indexing.</p>
-    <p><b>0.1.2</b> &mdash; columns built by helper functions (<code>*timestamps()</code>, <code>id = uuid_pk()</code>)
-    are recognised, and other libraries' <code>Table</code> classes (e.g. rich) no longer switch off checks.</p>
-    <p><b>0.1.1</b> &mdash; fewer false alarms. Now stays quiet (instead of guessing) for: table names computed by
-    <code>@declared_attr</code>, reflected tables (<code>autoload_with</code>), classes mapped imperatively or via
-    <code>__table__</code>, models defined inside functions, schema-qualified <code>secondary="schema.table"</code>,
-    columns added by <code>@declared_attr</code> mixins, and models whose base class comes from a library that
-    can't be resolved. Large projects no longer re-scan every file on each edit.</p>
-    <p><b>0.1.0</b> &mdash; first release: checks for <code>relationship</code>, <code>back_populates</code>,
-    <code>secondary</code>, <code>ForeignKey</code> and <code>filter_by</code>, with navigation and completion.</p>
+    <p><b>First public release.</b> Checks <code>relationship("Class")</code>, <code>back_populates</code>,
+    <code>secondary</code>, <code>ForeignKey("table.column")</code> and <code>filter_by(...)</code> (including
+    Flask-SQLAlchemy's <code>Model.query</code>), with Ctrl+click navigation and completion. Understands
+    <code>backref</code>, Flask-SQLAlchemy's automatic table names, <code>@declared_attr</code>, reflected tables,
+    schemas, mixins and tables declared by installed libraries &mdash; and stays quiet when it can't be sure.</p>
     ]]></change-notes>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.python</depends>

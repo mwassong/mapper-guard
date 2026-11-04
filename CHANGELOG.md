@@ -1,5 +1,9 @@
 # Changelog — Mapper Guard
 
+## 0.1.5 — 2026-11-04 (first public release)
+- Marketplace "What's New" now describes the release instead of listing internal pre-release versions.
+  No code changes from 0.1.4.
+
 ## 0.1.4 — 2026-11-03
 Final review with new kinds of checks: a 7-project corpus sweep (Superset, Airflow, Redash, Flask-AppBuilder,
 Indico, Lemur, FlaskBB - ~4,400 files never seen before) and mutation testing.
