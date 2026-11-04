@@ -34,6 +34,10 @@ M = [
  ("tablesComplete gate removed", K+"SqlaReferenceInspection.kt", "if (!model.tablesComplete || model.tableDeclarations(name).isNotEmpty()) return false", "if (model.tableDeclarations(name).isNotEmpty()) return false"),
  ("join() guard removed", K+"SqlaReferenceInspection.kt", '"join", "outerjoin",', '"outerjoin",'),
  ("library/nested class lookup off", K+"SqlaReferenceInspection.kt", "if (PyClassNameIndex.find(simple, context.project, true).isNotEmpty()) return true", ""),
+ ("__table__ columns ignored (#1)", K+"SqlaModel.kt", "if (table != null) out.addAll(hybridTableColumns(table) ?: return null)", ""),
+ ("unknown __table__ columns guessed (#1)", K+"SqlaModel.kt", "out.addAll(hybridTableColumns(table) ?: return null)", "out.addAll(hybridTableColumns(table).orEmpty())"),
+ ("bare __table__ annotation treated as unknown", K+"SqlaModel.kt", 'val table = c.findClassAttribute("__table__", false, null)?.findAssignedValue()\n                if (table != null)', 'val table = c.findClassAttribute("__table__", false, null)?.findAssignedValue()\n                if (c.findClassAttribute("__table__", false, null) != null)'),
+ ("__table__ key= ignored (#1)", K+"SqlaModel.kt", 'val key = c.getKeywordArgument("key")', "val key: PyExpression? = null"),
 ]
 env = dict(os.environ, JAVA_HOME=glob.glob(os.path.expanduser("~/.local/opt/jdk-21*"))[0])
 results = []

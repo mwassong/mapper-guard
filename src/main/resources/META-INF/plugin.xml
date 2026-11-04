@@ -17,15 +17,21 @@
     <p>Also adds <b>Ctrl+click navigation</b> and <b>completion</b> inside all of those strings.</p>
     <p>Built to stay quiet when your code is right: it only checks calls that resolve to SQLAlchemy, understands
     database column names that differ from attribute names, mixins, and duplicate model names across files.
-    Tested against the MLflow and CTFd codebases with zero false alarms.</p>
+    Tested on 9 open-source codebases (Superset, Airflow, MLflow, Redash, Indico, CTFd, Lemur, FlaskBB and
+    Flask-AppBuilder &mdash; about 4,400 files) with zero false alarms; it found two real broken foreign keys in Lemur.</p>
+    <p><b>To turn it off:</b> Settings &rarr; Editor &rarr; Inspections, search for &ldquo;Broken SQLAlchemy string
+    reference&rdquo;. <b>To silence one line:</b> put <code># noinspection SqlaReference</code> on the line above it.</p>
+    <p>Found a false alarm? Please <a href="https://github.com/mwassong/mapper-guard/issues">open an issue</a> with a
+    short code snippet &mdash; every report becomes a test.</p>
     <p>Not affiliated with or endorsed by the SQLAlchemy project.</p>
     ]]></description>
     <change-notes><![CDATA[
-    <p><b>First public release.</b> Checks <code>relationship("Class")</code>, <code>back_populates</code>,
+    <p><b>0.1.6</b> &mdash; Fixed a false alarm: models declared with <code>__table__ = Table(...)</code> no longer get
+    warnings on their columns in <code>filter_by()</code> and <code>back_populates</code>
+    (<a href="https://github.com/mwassong/mapper-guard/issues/1">#1</a>).</p>
+    <p><b>0.1.5</b> &mdash; First public release. Checks <code>relationship("Class")</code>, <code>back_populates</code>,
     <code>secondary</code>, <code>ForeignKey("table.column")</code> and <code>filter_by(...)</code> (including
-    Flask-SQLAlchemy's <code>Model.query</code>), with Ctrl+click navigation and completion. Understands
-    <code>backref</code>, Flask-SQLAlchemy's automatic table names, <code>@declared_attr</code>, reflected tables,
-    schemas, mixins and tables declared by installed libraries &mdash; and stays quiet when it can't be sure.</p>
+    Flask-SQLAlchemy's <code>Model.query</code>), with Ctrl+click navigation and completion.</p>
     ]]></change-notes>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.python</depends>

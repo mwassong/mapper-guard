@@ -385,8 +385,9 @@ class SqlaModel private constructor(
             for (c in listOf(cls) + cls.getAncestorClasses(null)) {
                 c.classAttributes.mapNotNullTo(out) { it.name }
                 // Hybrid mapping: every column of `__table__` becomes an attribute. Unknown columns -> unknown attributes.
-                val table = c.findClassAttribute("__table__", false, null)
-                if (table != null) out.addAll(hybridTableColumns(table.findAssignedValue()) ?: return null)
+                // A bare annotation (`__table__: ClassVar[FromClause]` on SQLAlchemy's own DeclarativeBase) assigns nothing.
+                val table = c.findClassAttribute("__table__", false, null)?.findAssignedValue()
+                if (table != null) out.addAll(hybridTableColumns(table) ?: return null)
                 c.methods.filter { m -> ATTRIBUTE_DECORATORS.any { hasDecorator(m, it) } }.mapNotNullTo(out) { it.name }
             }
             out.addAll(get(cls.project).backrefsOf(cls)) // attributes added to this class by backrefs elsewhere

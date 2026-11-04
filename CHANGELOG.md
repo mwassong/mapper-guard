@@ -1,8 +1,12 @@
 # Changelog — Mapper Guard
 
-## [Unreleased]
+## 0.1.6 — 2026-11-04
 - Fix #1: models declared with `__table__ = Table(...)` (hybrid mapping) no longer get false `filter_by()` /
-  `back_populates` warnings on their columns; a `__table__` whose columns can't be seen makes the check stay quiet.
+  `back_populates` warnings on their columns; a `__table__` whose columns can't be seen makes the check stay quiet. `Column(..., key="x")` maps to attribute `x`.
+- Release review caught a regression in that fix before shipping: SQLAlchemy's own `DeclarativeBase` declares
+  `__table__: ClassVar[...]` with no value, which silenced `filter_by` checks in every real project. Bare annotations
+  are now ignored (new test + mutation). Unit tests and CI missed it; `installed_check.sh` caught it.
+- Marketplace description: 9-project test results, how to turn the check off or silence a line, where to report false alarms.
 
 ## 0.1.5 — 2026-11-04 (first public release)
 - Marketplace "What's New" now describes the release instead of listing internal pre-release versions.

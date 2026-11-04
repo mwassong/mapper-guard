@@ -571,6 +571,49 @@ class SqlaReferenceInspectionTest : BasePlatformTestCase() {
         """,
     )
 
+    // SQLAlchemy's real DeclarativeBase declares `__table__: ClassVar[FromClause]` with no value. That annotation must
+    // not make every model's attributes "unknown" (it silenced filter_by in real projects; caught by installed_check).
+    fun testTableAnnotationOnBaseDoesNotSilenceChecks() = quiet(
+        "annotated_base.py" to """
+        from typing import ClassVar
+        from sqlalchemy import Column, Integer, String
+        from sqlalchemy.orm import Session
+
+        class AnnotatedBase:
+            __table__: ClassVar[object]
+
+        class Member(AnnotatedBase):
+            __tablename__ = "members"
+            id = Column(Integer, primary_key=True)
+            name = Column(String(50))
+
+        def find(session: Session):
+            session.query(Member).filter_by(name="x", <warning descr="'Member' has no attribute 'nmae'">nmae</warning>="x")
+        """,
+    )
+
+    // Column(..., key="x") maps the column onto attribute x, not onto its database name.
+    fun testHybridTableColumnKeyIsTheAttribute() = quiet(
+        "hybrid4.py" to """
+        from sqlalchemy import Column, Integer, String, Table
+        from sqlalchemy.orm import DeclarativeBase, Session
+
+        class Base(DeclarativeBase):
+            pass
+
+        class Account6(Base):
+            __table__ = Table(
+                "accounts6", Base.metadata,
+                Column("id", Integer, primary_key=True),
+                Column("acct_name", String(50), key="name"),
+            )
+
+        def find(session: Session):
+            session.query(Account6).filter_by(name="x")
+            session.query(Account6).filter_by(<warning descr="'Account6' has no attribute 'acct_name'">acct_name</warning>="x")
+        """,
+    )
+
     fun testFlaskSqlalchemyAutomaticTableNames() {
         myFixture.configureByText(
             "flaskauto.py",

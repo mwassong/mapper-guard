@@ -42,6 +42,10 @@ JAVA_HOME=$(ls -d ~/.local/opt/jdk-21*) ./gradlew ktlintCheck test verifyPlugin 
   not evidence ("user" is in 31 library files), and library `Table(variable, ...)` calls are internals, not tables.
 - **Flask-SQLAlchemy names tables itself** (`camel_to_snake_case`), and `backref=` adds attributes to the other
   class. Both look like errors to a naive scan.
+- **Unit tests do NOT have the real SQLAlchemy installed** (`DeclarativeBase` is unresolved there). Any logic that walks
+  ancestor classes also walks SQLAlchemy's own bases in real projects, which carry bare annotations like
+  `__table__: ClassVar[FromClause]`. Treat an annotation without a value as absent, and add a unit test with a local
+  base class that mimics it. The #1 auto-fix passed CI but silenced `filter_by` everywhere; only `installed_check.sh` caught it.
 - **Per-file facts only depend on their own file** (`SqlaModel.extract`). Anything that needs another file
   (inherited table names, ancestors) is resolved at aggregate or query time, or the cache goes stale.
 
