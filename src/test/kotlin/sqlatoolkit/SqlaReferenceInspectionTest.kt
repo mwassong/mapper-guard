@@ -522,6 +522,18 @@ class SqlaReferenceInspectionTest : BasePlatformTestCase() {
         myFixture.checkHighlighting(true, false, false)
     }
 
+    /** Documented in the Marketplace "Getting Started": one warning can be silenced with a comment. */
+    fun testNoinspectionCommentSuppresses() {
+        models()
+        myFixture.configureByText(
+            "suppressed.py",
+            "from sqlalchemy.orm import relationship\n\n# noinspection SqlaReference\nx = relationship(\"Usre\")\n" +
+                "y = relationship(\"Usre\")\n",
+        )
+        val hits = myFixture.doHighlighting().filter { it.description == "Unknown mapped class 'Usre'" }
+        assertEquals("only the un-suppressed line should warn", 1, hits.size)
+    }
+
     // ---- navigation and completion (advertised features, previously untested) -----------------
     private fun atCaret(code: String) {
         models()
