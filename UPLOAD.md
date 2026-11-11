@@ -2,8 +2,8 @@
 
 Everything else is done for the current release (`v0.1.7`): 44/44 unit tests, ktlint clean, JetBrains'
 verifier says **Compatible**, the real-codebase harness passes (0 false alarms, 6/6 planted errors caught), and
-the installed check passes (fresh profile, real interpreter, uninstall), the 7-project corpus sweep has zero false
-alarms, and mutation testing catches 25/25 deliberate bugs.
+the installed check passes (fresh profile, real interpreter, uninstall). The 7-project corpus sweep (zero false
+alarms) and mutation testing (25/25) last ran on 0.1.6; 0.1.7 changed only plugin.xml, so they were not re-run.
 
 ## Status (2026-11-03)
 - Source is public at https://github.com/mwassong/mapper-guard (default branch `main`).
