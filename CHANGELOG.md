@@ -1,5 +1,9 @@
 # Changelog — Mapper Guard
 
+## 0.1.7 — 2026-11-10
+- Register JetBrains' Marketplace error reporter. Before this, exception and UI-freeze reports never reached
+  the vendor page (the Exceptions and Freezes tabs could only ever be empty). New test checks the registration.
+
 ## 0.1.6 — 2026-11-04
 - Fix #1: models declared with `__table__ = Table(...)` (hybrid mapping) no longer get false `filter_by()` /
   `back_populates` warnings on their columns; a `__table__` whose columns can't be seen makes the check stay quiet. `Column(..., key="x")` maps to attribute `x`.

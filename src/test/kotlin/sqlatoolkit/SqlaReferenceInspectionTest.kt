@@ -696,6 +696,18 @@ class SqlaReferenceInspectionTest : BasePlatformTestCase() {
         assertTrue("got $offered", offered.containsAll(listOf("id", "name", "email")))
     }
 
+    // Without this registration JetBrains never forwards exception or UI-freeze reports to the vendor page.
+    fun testMarketplaceErrorReportingIsRegistered() {
+        val ours = com.intellij.openapi.extensions.ExtensionPointName
+            .create<com.intellij.openapi.diagnostic.ErrorReportSubmitter>("com.intellij.errorHandler")
+            .extensionList
+            .filter { it.pluginDescriptor?.pluginId?.idString == "io.github.mwassong.mapper-guard" }
+        assertTrue(
+            "Mapper Guard must register JetBrainsMarketplaceErrorReportSubmitter",
+            ours.any { it.javaClass.name == "com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter" },
+        )
+    }
+
     fun testNonSqlalchemyCodeIsUntouched() = check(
         """
         def relationship(x): return x

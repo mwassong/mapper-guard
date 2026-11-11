@@ -26,6 +26,8 @@
     <p>Not affiliated with or endorsed by the SQLAlchemy project.</p>
     ]]></description>
     <change-notes><![CDATA[
+    <p><b>0.1.7</b> &mdash; If the plugin ever hits an error, the IDE can now send the report (only with your
+    consent) to the developer, so it gets fixed quickly.</p>
     <p><b>0.1.6</b> &mdash; Fixed a false alarm: models declared with <code>__table__ = Table(...)</code> no longer get
     warnings on their columns in <code>filter_by()</code> and <code>back_populates</code>
     (<a href="https://github.com/mwassong/mapper-guard/issues/1">#1</a>).</p>
@@ -40,5 +42,7 @@
                          groupName="SQLAlchemy" enabledByDefault="true" level="WARNING"
                          implementationClass="sqlatoolkit.SqlaReferenceInspection"/>
         <psi.referenceContributor language="Python" implementation="sqlatoolkit.SqlaReferenceContributor"/>
+        <!-- Sends crash and UI-freeze reports (with the user's consent) to the vendor's Marketplace page. -->
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
     </extensions>
 </idea-plugin>

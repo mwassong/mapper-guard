@@ -14,7 +14,7 @@ Catches broken SQLAlchemy string references while you type — the ones that oth
 Plus Ctrl+click navigation and completion inside all of those strings.
 
 ## Verification (every release)
-- **Unit tests** (`./gradlew test`): 43 tests. Every rule has "must flag" and "must NOT flag" cases, plus
+- **Unit tests** (`./gradlew test`): 44 tests. Every rule has "must flag" and "must NOT flag" cases, plus
   navigation, completion, exactly-once reporting and indexing-time safety.
 - **Real code** (`scripts/real_world_check.sh`): MLflow and CTFd, headless PyCharm. 0 warnings on pristine
   code, and 6/6 planted typos caught.

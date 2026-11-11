@@ -1,6 +1,6 @@
 # Publishing Mapper Guard — the steps only you can do (~10 minutes)
 
-Everything else is done for the current release (`v0.1.6`): 43/43 unit tests, ktlint clean, JetBrains'
+Everything else is done for the current release (`v0.1.7`): 44/44 unit tests, ktlint clean, JetBrains'
 verifier says **Compatible**, the real-codebase harness passes (0 false alarms, 6/6 planted errors caught), and
 the installed check passes (fresh profile, real interpreter, uninstall), the 7-project corpus sweep has zero false
 alarms, and mutation testing catches 25/25 deliberate bugs.
